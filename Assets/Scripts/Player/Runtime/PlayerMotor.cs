@@ -38,6 +38,7 @@ namespace ShooterMashup.Player
         public event Action<PmEvent> MoveEvent;
 
         public PlayerState State => state;
+        /// <summary>State before the latest tick. Its origin already includes any step-up from that tick.</summary>
         public PlayerState PreviousState => previousState;
         public PlayerCmd LastCmd => lastCmd;
         public PlayerMove Simulation => pmove;
@@ -138,7 +139,14 @@ namespace ShooterMashup.Player
 
                 var events = pmove.Events;
                 for (int i = 0; i < events.Count; i++)
+                {
+                    // Don't interpolate across a step. PlayerView smooths it from the moment the
+                    // event fires, so the step's height has to be applied in full right away.
+                    // Otherwise the eye briefly drops below where it was.
+                    if (events[i].type == PmEventType.StepUp)
+                        previousState.origin.y += events[i].value;
                     MoveEvent?.Invoke(events[i]);
+                }
 
                 // Don't spiral after a long hitch.
                 if (++ticks >= 25)
