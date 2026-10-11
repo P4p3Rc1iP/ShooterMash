@@ -535,16 +535,16 @@ namespace ShooterMashup.Player.Tests
         public void EtExactPreset_MatchesDefaults()
         {
             var config = new MoveConfig();
-            MovePresets.Apply(config, MovePreset.Rounded);
+            MovePresets.Apply(config, MovePreset.ShooterMash);
             Assert.AreNotEqual(JsonUtility.ToJson(new MoveConfig()), JsonUtility.ToJson(config));
             MovePresets.Apply(config, MovePreset.EtExact);
             Assert.AreEqual(JsonUtility.ToJson(new MoveConfig()), JsonUtility.ToJson(config));
         }
 
         [Test]
-        public void RoundedPreset_SpeedsAndJump()
+        public void ShooterMashPreset_SpeedsAndJump()
         {
-            MovePresets.Apply(cfg, MovePreset.Rounded);
+            MovePresets.Apply(cfg, MovePreset.ShooterMash);
             Spawn(new Vector3(0, 0.6f, 0));
             Run(1500, forward: 127);
             Assert.AreEqual(6.4f, HorizontalSpeed, SpeedTolerance);
@@ -563,22 +563,46 @@ namespace ShooterMashup.Player.Tests
         }
 
         [TestCase(0.45f, true)]
-        [TestCase(0.5f, false)]
-        public void RoundedPreset_StepSize(float riser, bool climbable)
+        [TestCase(0.5f, true)]
+        [TestCase(0.56f, false)]
+        public void ShooterMashPreset_StepSize(float riser, bool climbable)
         {
-            MovePresets.Apply(cfg, MovePreset.Rounded);
+            MovePresets.Apply(cfg, MovePreset.ShooterMash);
             Box(new Vector3(0, riser / 2, 2.5f + 6.5f), new Vector3(3.2f, riser, 13f));
             Spawn(new Vector3(0, 0.6f, 0));
             Run(1500, forward: 127);
             Assert.AreEqual(climbable ? 0.6f + riser : 0.6f, Pos.y, 0.03f);
         }
 
+        [Test]
+        public void ShooterMashPreset_ProneFitsUnderAFloorOnOneMetrePillars()
+        {
+            // A floor on 1 m pillars has its top at 1 m and its underside at 0.8 m.
+            MovePresets.Apply(cfg, MovePreset.ShooterMash);
+            BuildTunnel(0.8f);
+            Spawn(new Vector3(0, 0.6f, 0));
+            Run(Tick, buttons: CmdButtons.Prone);
+            Assert.IsTrue(st.IsProne);
+            Run(9000, forward: 127);
+            Assert.Greater(Pos.z, 10f, "prone player should get through");
+        }
+
+        [Test]
+        public void EtProne_DoesNotFitUnderAFloorOnOneMetrePillars()
+        {
+            BuildTunnel(0.8f);
+            SpawnOnFloor();
+            Run(Tick, buttons: CmdButtons.Prone);
+            Run(9000, forward: 127);
+            Assert.Less(Pos.z, 3.6f);
+        }
+
         [TestCase(5.9f, PmEventType.FallShort, 0)]
         [TestCase(6.2f, PmEventType.FallDamage, 10)]
         [TestCase(12.2f, PmEventType.FallDamage, 500)]
-        public void RoundedPreset_FallDamage(float drop, PmEventType expected, int damage)
+        public void ShooterMashPreset_FallDamage(float drop, PmEventType expected, int damage)
         {
-            MovePresets.Apply(cfg, MovePreset.Rounded);
+            MovePresets.Apply(cfg, MovePreset.ShooterMash);
             Spawn(new Vector3(0, 0.6f + drop, 0));
             Run(3000);
             PmEvent landing = events.Single(e => e.type == PmEventType.FallShort || e.type == PmEventType.FallDamage);

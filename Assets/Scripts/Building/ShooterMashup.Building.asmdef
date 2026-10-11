@@ -1,0 +1,17 @@
+{
+    "name": "ShooterMashup.Building",
+    "rootNamespace": "ShooterMashup.Building",
+    "references": [
+        "ShooterMashup.Player",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

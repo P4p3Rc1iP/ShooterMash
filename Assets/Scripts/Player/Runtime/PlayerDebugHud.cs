@@ -5,7 +5,7 @@ namespace ShooterMashup.Player
 {
     /// <summary>
     /// Developer overlay: speedometer, stance, stamina, health, crosshair, plus debug keys
-    /// (F1 noclip, F2 respawn, F3 toggle overlay, F4 ET-exact / rounded values).
+    /// (F1 noclip, F2 respawn, F3 toggle overlay, F4 ShooterMash / ET-exact values).
     /// </summary>
     [RequireComponent(typeof(PlayerMotor))]
     public class PlayerDebugHud : MonoBehaviour
@@ -56,7 +56,7 @@ namespace ShooterMashup.Player
                 show = !show;
             if (kb.f4Key.wasPressedThisFrame)
             {
-                motor.SetPreset(motor.Preset == MovePreset.EtExact ? MovePreset.Rounded : MovePreset.EtExact);
+                motor.SetPreset(motor.Preset == MovePreset.EtExact ? MovePreset.ShooterMash : MovePreset.EtExact);
                 lastEvent = $"values: {motor.Preset}";
                 lastEventTime = Time.time;
             }
@@ -105,7 +105,7 @@ namespace ShooterMashup.Player
                 : "stand";
 
             string text =
-                $"<b>{Mathf.RoundToInt(smoothedFps)} fps</b>  tick {motor.tickRate} Hz   <b>values: {(motor.Preset == MovePreset.EtExact ? "ET exact" : "rounded")}</b>\n" +
+                $"<b>{Mathf.RoundToInt(smoothedFps)} fps</b>  tick {motor.tickRate} Hz   <b>values: {(motor.Preset == MovePreset.EtExact ? "ET exact" : "ShooterMash")}</b>\n" +
                 $"speed  {speed:0.00} m/s  ({speed * 3.6f:0.0} km/h, {speed / 0.0254f:0} ET ups)  peak {peakSpeed:0.00}\n" +
                 $"vert   {s.velocity.y:0.00} m/s\n" +
                 $"stance {stance}   ground {(s.onGround ? "yes" : "no")}   water {s.waterLevel}\n" +
@@ -114,7 +114,8 @@ namespace ShooterMashup.Player
                 $"event  {(Time.time - lastEventTime < 2f ? lastEvent : "")}\n" +
                 "\n<color=#aaa>WASD move, Space jump, C/Ctrl crouch, X prone,\n" +
                 "Shift sprint, Alt walk, Q/E lean, double-tap W crouched = prone\n" +
-                "F1 noclip, F2 respawn, F3 hide, F4 ET-exact/rounded, Esc free mouse</color>";
+                "F1 noclip, F2 respawn, F3 hide, F4 ShooterMash/ET-exact, Esc free mouse\n" +
+                "B build tool</color>";
             GUI.Label(new Rect(12, 10, 520, 260), text, style);
 
             // Stamina and health bars, bottom left like ET.

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using ShooterMashup.Building;
 using ShooterMashup.Player;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -23,7 +24,7 @@ namespace ShooterMashup.EditorTools
         static Transform root;
         static Object meshContainer;
         static readonly Dictionary<string, Mesh> MeshCache = new Dictionary<string, Mesh>();
-        static Material matFloor, matWall, matTrim, matLadder, matSlick, matWater, matTarget;
+        static Material matFloor, matWall, matTrim, matLadder, matSlick, matWater, matTarget, matDirt;
         static Font labelFont;
 
         [MenuItem("ShooterMashup/Build Movement Test Map")]
@@ -64,6 +65,7 @@ namespace ShooterMashup.EditorTools
             BuildLeanCorner(new Vector3(-33, 0, -8));
             BuildSlickFloor(new Vector3(28, 0, -5));
             BuildStrafeLane(-38);
+            BuildBuildingArea(new Vector3(56, 0, 8));
 
             BuildPlayer(new Vector3(0, 0.65f, 0));
 
@@ -93,7 +95,8 @@ namespace ShooterMashup.EditorTools
                 }
                 float top = steps * riser;
                 Box($"Landing {riser}", new Vector3(x, top / 2, at.z + steps * tread + 1.6f), new Vector3(width, top, 3.2f), matWall, parent);
-                string verdict = riser <= 0.4572f ? "walkable" : "too tall";
+                // ET steps up 0.457 m, ShooterMash 0.52 m.
+                string verdict = riser <= 0.4572f ? "walkable" : riser <= 0.52f ? "walkable\n(not in ET)" : "too tall";
                 Label($"{riser * 100:0} cm steps\n{verdict}", new Vector3(x, 2.3f, at.z - 0.6f), parent);
             }
         }
@@ -115,7 +118,7 @@ namespace ShooterMashup.EditorTools
                 Box($"Ramp {a}", center, new Vector3(width, thick, length), i % 2 == 0 ? matWall : matTrim, parent,
                     Quaternion.Euler(-a, 0, 0));
                 string verdict = Mathf.Cos(rad) >= 0.7f ? "walkable" : "slide";
-                Label($"{a}°\n{verdict}", new Vector3(x, 2.3f, at.z - 0.6f), parent);
+                Label($"{a}Â°\n{verdict}", new Vector3(x, 2.3f, at.z - 0.6f), parent);
             }
         }
 
@@ -140,6 +143,9 @@ namespace ShooterMashup.EditorTools
             Label("crouch\n(1.4 m)", new Vector3(at.x, 3.6f, at.z - 0.6f), parent);
             Tunnel("Prone tunnel", new Vector3(at.x + 6, 0, at.z), 1.1f, 13, parent);
             Label("prone\n(1.1 m)", new Vector3(at.x + 6, 3.6f, at.z - 0.6f), parent);
+            // A floor on 1 m pillars leaves 0.8 m: only the ShooterMash prone hull (0.6 m) fits.
+            Tunnel("Low prone tunnel", new Vector3(at.x + 12, 0, at.z), 0.8f, 13, parent);
+            Label("prone\n(0.8 m, not ET)", new Vector3(at.x + 12, 3.6f, at.z - 0.6f), parent);
         }
 
         static void Tunnel(string name, Vector3 entrance, float innerHeight, float length, Transform parent)
@@ -248,14 +254,51 @@ namespace ShooterMashup.EditorTools
             Label("strafe-jump lane\nmarkers every 5 m", new Vector3(0, 5.6f, z + 0.8f), parent, 180);
         }
 
+        static void BuildBuildingArea(Vector3 at)
+        {
+            var parent = Group("Building area");
+            Label("building area\nB: build tool", new Vector3(at.x, 4f, at.z - 22f), parent);
+
+            // Owns all placed pieces.
+            new GameObject("Structures").AddComponent<StructureManager>();
+
+            // Diggable ground: a 1 m thick pad of blocks standing in for voxel terrain.
+            Vector3 pad = new Vector3(at.x - 4f, 0f, at.z - 16f); // corner
+            for (int i = 0; i < 8; i++)
+            for (int k = 0; k < 8; k++)
+                DiggableBlockAt(new Vector3(pad.x + i + 0.5f, 0.5f, pad.z + k + 0.5f), parent);
+            Box("Dig pad step", new Vector3(pad.x + 4f, 0.25f, pad.z - 0.4f), new Vector3(8f, 0.5f, 0.8f), matTrim, parent);
+            Label("diggable ground\nbuild on it, then hold\nright mouse to dig", new Vector3(pad.x + 4f, 3f, pad.z - 1f), parent);
+
+            // Two diggable cliffs, 20 m apart: wood can't bridge that without a pillar, iron can.
+            foreach (float side in new[] { -1f, 1f })
+            {
+                float inner = at.x + side * 10f;
+                for (int i = 0; i < 3; i++)
+                for (int k = 0; k < 3; k++)
+                for (int y = 0; y < 4; y++)
+                    DiggableBlockAt(new Vector3(inner + side * (i + 0.5f), y + 0.5f, at.z - 1f + k), parent);
+            }
+            Label("20 m gap\nbridge it", new Vector3(at.x, 6f, at.z - 2f), parent);
+        }
+
+        static void DiggableBlockAt(Vector3 center, Transform parent)
+        {
+            GameObject go = Box("Dirt", center, Vector3.one, matDirt, parent);
+            GameObjectUtility.SetStaticEditorFlags(go, 0); // it gets removed at runtime
+            go.AddComponent<DiggableBlock>();
+        }
+
         static void BuildPlayer(Vector3 origin)
         {
             var player = new GameObject("Player");
             player.transform.position = origin;
             player.AddComponent<LocalPlayerInput>();
             var motor = player.AddComponent<PlayerMotor>();
+            motor.SetPreset(MovePreset.ShooterMash);
             player.AddComponent<PlayerVitals>();
             player.AddComponent<PlayerDebugHud>();
+            player.AddComponent<BuildTool>();
 
             var camGo = new GameObject("PlayerCamera");
             camGo.tag = "MainCamera";
@@ -388,6 +431,7 @@ namespace ShooterMashup.EditorTools
             matSlick = Mat("DevSlick", grid, new Color(0.45f, 0.75f, 1f), 0.9f);
             matTarget = Mat("DevTarget", grid, new Color(0.85f, 0.2f, 0.2f));
             matWater = Mat("DevWater", null, new Color(0.15f, 0.4f, 0.6f, 0.45f), 0.95f);
+            matDirt = Mat("DevDirt", grid, new Color(0.5f, 0.38f, 0.26f));
             MakeTransparent(matWater);
         }
 

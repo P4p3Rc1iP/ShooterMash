@@ -34,25 +34,55 @@ Key decisions so far:
   reconciliation are planned around `PlayerCmd` and `PlayerState`.
 - **Metric**, converted exactly from ET's inches. ET's tiny internal tolerances are kept as
   multiples of an `Inch` constant so they can still be compared with the ET source.
-- **Presets:** `MovePreset.EtExact` (default) and `Rounded` (1.8 m, 6.4 m/s run, 20 m/s² gravity...).
-  F4 toggles them in play mode so the owner can compare the feel. Not yet decided which to keep.
+- **Presets:** `MovePreset.ShooterMash` is the default and our own value set: ET rounded to metric
+  (1.8 m, 6.4 m/s run, 20 m/s² gravity...) plus building-driven changes: 0.52 m step height (run
+  up 50 cm steps) and a 0.6 m prone hull (fits under a floor on 1 m pillars, 0.8 m clearance).
+  `EtExact` is kept for comparison; F4 toggles them in play mode.
 - **No velocity rounding:** ET's "125 fps jump" quirk was removed on purpose.
 - **Strafe jumping** is ET-faithful; `MoveConfig.maxAirSpeed` can tame it later.
 - **`MoveModifiers`** (speed, staminaMax, staminaCost, staminaRegen) live in `PlayerState`. Future
   systems (food, encumbrance, injuries) affect movement through these, never by calling into the
   movement code, which has to stay deterministic for networking.
 
+## Building (structures)
+
+Code is in `Assets/Scripts/Building/`; read its `README.md` first. First prototype, Valheim-inspired.
+
+Agreed with the owner:
+- Storeys are 2.5 m (2x2.5 walls, 2.5 m pillars and stairs; a floor on top leaves 2.3 m
+  headroom for the 1.8 m player). 1 m and 0.5 m pieces stack to the same height.
+- Valheim-style pieces (2x2 floors, 2x2.5 walls as the norm, 1x1 for detail) that snap, or place
+  freely with Shift. Q/E pick the snap point (and then allow overlaps), R cycles rotation steps
+  (90, 45, 22.5, 15, free). Hold RMB to remove, MMB opens the menu. Rotation is always
+  world space, also when snapping; Shift+MMB copies the aimed piece (shape, material,
+  rotation). Placeholder texture and colour per material. Sizes may change once they've been
+  tried in first person.
+- Valheim's support model per material (wood, stone, iron for now; Gorkamorka materials like
+  scrap and plastic later). Integrity is solved exactly and in real time.
+- Structures must rest on terrain or static world geometry. Digging out the ground under a
+  structure collapses it. Pieces sit freely on voxel terrain (no voxel snapping), and voxel
+  size is unrelated to piece size. The voxel world must report changed regions to
+  `BuildSystem.TerrainChanged`.
+- Undo is narrow on purpose: your own actions, 60 s window, refused once anyone else changed
+  that spot. A removal's undo restores everything that collapsed with it.
+- Collapsed pieces vanish for now; physical, fading debris is wanted later (cosmetic only).
+- Same networking shape as movement: `BuildSystem.Execute(BuildCmd)` is pure and deterministic.
+- Vehicles are a separate, later step. The player controller has no moving-platform support
+  yet, which is the main risk there.
+
 ## To-do / open questions
 
 - Sprinting in big open terrain. Ideas raised but not built: soft sprint falloff as stamina runs
   low, open-world tuning (bigger bar, regen while walking), and a long-term fatigue layer that
   food and water feed into (like Valheim's food-based max stamina).
-- **Voxel block size:** step height is 0.46 m and the jump is 1.16 m. If voxels are 1 m blocks,
+- **Voxel block size:** step height is 0.52 m (ShooterMash) and the jump is 1.16 m. If voxels are 1 m blocks,
   players can't walk up single blocks. Needs agreeing with the voxel developer.
 - **Licensing:** the controller closely follows ET's GPL source (`bg_pmove.c`, `bg_slidemove.c`,
   `cg_view.c`). Fine for a prototype; shipping closed-source would need a clean-room rewrite or
   legal advice.
-- Weapons, interaction and building systems don't exist yet.
+- Weapons, interaction, resources and vehicles don't exist yet.
+- Building ideas not yet done: falling debris, a collapse "creak" warning, piece health,
+  showing nearby snap points, a workbench / build-range rule, resource costs.
 
 ## Unity physics gotchas (learned the hard way)
 
@@ -69,11 +99,16 @@ Key decisions so far:
 
 - Edit-mode tests in `Assets/Tests/EditMode` check the controller against ET's numbers (speeds,
   jump, stamina, steps, slopes, fall damage, tunnels, lean, ladders, water, modifiers, presets,
-  determinism). Run them in Window > General > Test Runner.
+  determinism), and the building system (support, collapse, undo, snapping) in
+  `Assets/Tests/EditMode/Building`. Run them in Window > General > Test Runner.
 - The Unity editor is usually open, so batch-mode Unity can't run on this project folder. To
   test from the command line, copy `Assets`, `Packages` and `ProjectSettings` to a scratch
   folder and run there:
   `Unity.exe -batchmode -nographics -projectPath <copy> -runTests -testPlatform EditMode -testResults <file>`
+- To *see* something without the owner, drop the `-nographics` flag and run a throwaway
+  play-mode test in the copy that renders a camera to a RenderTexture and saves a PNG. After
+  copying `Assets` again, rebuild the test map in the copy first: script GUIDs in the copied
+  `.meta` files differ from the copy's old scene.
 - Test map: menu **ShooterMashup > Build Movement Test Map** regenerates
   `Assets/Scenes/MovementTest.unity` (stairs, ramps, crates, tunnels, ladders, fall towers,
-  water, slick floor, strafe lane).
+  water, slick floor, strafe lane, and a building area with diggable dirt and bridge cliffs).

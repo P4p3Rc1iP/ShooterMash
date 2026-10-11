@@ -18,6 +18,8 @@ namespace ShooterMashup.Player
         public float standViewHeight = 1.016f;
         public float crouchViewHeight = 0.4064f;
         public float proneViewHeight = -0.2032f;
+        [Tooltip("Height of the body hull when prone, from the feet. ET: 1.02 m (taller than its prone eye height).")]
+        public float proneHeight = 1.016f;
         public float deadViewHeight = -0.4064f;
         [Tooltip("Prone adds a second box for the legs, this far behind the body.")]
         public float proneLegsDistance = 0.8128f;
@@ -114,7 +116,7 @@ namespace ShooterMashup.Player
         public int maxStepMsec = 50;
 
         public float CrouchMaxY => maxs.y - (standViewHeight - crouchViewHeight);
-        public float ProneMaxY => maxs.y - standViewHeight - proneViewHeight;
+        public float ProneMaxY => mins.y + proneHeight;
     }
 
     [Serializable]

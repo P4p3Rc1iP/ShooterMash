@@ -15,9 +15,9 @@ namespace ShooterMashup.Player
     [RequireComponent(typeof(LocalPlayerInput))]
     public class PlayerMotor : MonoBehaviour
     {
-        [Tooltip("ET-exact or rounded metric values. Switching overwrites the sizes, speeds, gravity " +
+        [Tooltip("ShooterMash (our values) or ET-exact. Switching overwrites the sizes, speeds, gravity " +
                  "and fall heights in Movement below. F4 toggles it in play mode.")]
-        [SerializeField] MovePreset preset = MovePreset.EtExact;
+        [SerializeField] MovePreset preset = MovePreset.ShooterMash;
 
         public MoveConfig movement = new MoveConfig();
 
@@ -63,6 +63,12 @@ namespace ShooterMashup.Player
         void Awake()
         {
             input = GetComponent<LocalPlayerInput>();
+            // A component added from code (or an old scene) may not have had its preset written yet.
+            if (preset != appliedPreset)
+            {
+                MovePresets.Apply(movement, preset);
+                appliedPreset = preset;
+            }
             pmove = new PlayerMove(movement, new UnityPmoveWorld(solidMask));
             SpawnPosition = transform.position;
             SpawnYaw = transform.eulerAngles.y;

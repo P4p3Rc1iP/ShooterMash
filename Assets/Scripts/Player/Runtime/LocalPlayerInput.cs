@@ -25,6 +25,12 @@ namespace ShooterMashup.Player
         public int doubleTapWindowMs = 250;
         public bool lockCursorOnStart = true;
 
+        [Tooltip("Set by tools that use Q/E for something else (the build tool).")]
+        public bool leanEnabled = true;
+
+        /// <summary>A menu owns the mouse: no look, and clicks don't recapture the cursor.</summary>
+        [HideInInspector] public bool uiOpen;
+
         public float Pitch { get; private set; }
         public float Yaw { get; private set; }
 
@@ -99,12 +105,16 @@ namespace ShooterMashup.Player
             var keyboard = Keyboard.current;
             var mouse = Mouse.current;
 
-            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
-                SetCursorLocked(false);
-            else if (mouse != null && !CursorLocked && mouse.leftButton.wasPressedThisFrame)
-                SetCursorLocked(true);
+            // While a menu is open it handles the cursor itself.
+            if (!uiOpen)
+            {
+                if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+                    SetCursorLocked(false);
+                else if (mouse != null && !CursorLocked && mouse.leftButton.wasPressedThisFrame)
+                    SetCursorLocked(true);
+            }
 
-            if (mouse != null && CursorLocked)
+            if (mouse != null && CursorLocked && !uiOpen)
             {
                 Vector2 d = mouse.delta.ReadValue();
                 Yaw += d.x * sensitivity * mYaw;
@@ -156,8 +166,8 @@ namespace ShooterMashup.Player
             var buttons = CmdButtons.None;
             if (sprint.IsPressed()) buttons |= CmdButtons.Sprint;
             if (walking) buttons |= CmdButtons.Walk;
-            if (leanLeft.IsPressed()) buttons |= CmdButtons.LeanLeft;
-            if (leanRight.IsPressed()) buttons |= CmdButtons.LeanRight;
+            if (leanEnabled && leanLeft.IsPressed()) buttons |= CmdButtons.LeanLeft;
+            if (leanEnabled && leanRight.IsPressed()) buttons |= CmdButtons.LeanRight;
             if (pendingProne) buttons |= CmdButtons.Prone;
 
             var cmd = new PlayerCmd

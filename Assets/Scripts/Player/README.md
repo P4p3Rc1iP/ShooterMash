@@ -19,7 +19,7 @@ exactly to metres), the same order of operations and the same quirks, so it feel
 | Left Alt | walk (silent) |
 | Q / E | lean |
 | F1 / F2 / F3 | noclip / respawn / toggle HUD |
-| F4 | switch between ET-exact and rounded metric values |
+| F4 | switch between the ShooterMash (default) and ET-exact values |
 | Esc | free the mouse (click to recapture) |
 
 ## Layout
@@ -47,9 +47,12 @@ Runtime/      Unity glue for a local player
   value was converted exactly, so the player is 1.83 m tall, steps up 0.46 m, runs 6.5 m/s,
   sprints 8.9 m/s and jumps 1.16 m. ET's tiny internal tolerances are written in the code
   as multiples of `Inch` so they can still be compared with the original source.
-- **Presets.** `PlayerMotor` has a preset dropdown (F4 in play mode): *ET exact* or *Rounded*
-  (1.8 m tall, 0.45 m steps, 6.4 m/s run, 20 m/s² gravity, fall damage from 6 m...).
+- **Presets.** `PlayerMotor` has a preset dropdown (F4 in play mode). *ShooterMash* is the
+  default: ET rounded to metric (1.8 m tall, 6.4 m/s run, 20 m/s² gravity, fall damage from
+  6 m...) plus changes for building: 0.52 m steps (so 50 cm steps can be run up) and a 0.6 m
+  prone hull that fits under a floor on 1 m pillars. *ET exact* is the original, for comparison.
   Picking one overwrites those values in `movement`; see `MovePresets.cs`.
+  (ET's prone hull is 1.02 m, taller than its eyes; `MoveConfig.proneHeight` sets it separately.)
 - **The transform is the simulation origin**, 0.61 m above the feet, as in ET.
 - **Stamina** is 0..1 for a full ET bar (4 s of sprint, 0.125 per jump).
 - **Modifiers.** `PlayerState.modifiers` (speed, staminaMax, staminaCost, staminaRegen) is how

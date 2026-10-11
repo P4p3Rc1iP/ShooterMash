@@ -6,8 +6,11 @@ namespace ShooterMashup.Player
     {
         /// <summary>ET's values converted exactly from inches. Feels identical to ET.</summary>
         EtExact,
-        /// <summary>The same, rounded to friendly metric numbers (1-2% different).</summary>
-        Rounded,
+        /// <summary>
+        /// Our own values: ET rounded to friendly metric numbers (1-2% different), plus changes for
+        /// building: a lower prone hull that fits under a floor on 1 m pillars, and 50 cm steps.
+        /// </summary>
+        ShooterMash,
     }
 
     /// <summary>
@@ -19,8 +22,8 @@ namespace ShooterMashup.Player
     {
         public static void Apply(MoveConfig c, MovePreset preset)
         {
-            if (preset == MovePreset.Rounded)
-                ApplyRounded(c);
+            if (preset == MovePreset.ShooterMash)
+                ApplyShooterMash(c);
             else
                 ApplyEtExact(c);
         }
@@ -32,6 +35,7 @@ namespace ShooterMashup.Player
             c.standViewHeight = 1.016f;                              // eyes at 1.63 m
             c.crouchViewHeight = 0.4064f;
             c.proneViewHeight = -0.2032f;
+            c.proneHeight = 1.016f;
             c.deadViewHeight = -0.4064f;
             c.proneLegsDistance = 0.8128f;
             c.proneLegsMins = new Vector3(-0.3429f, -0.6096f, -0.3429f);
@@ -58,18 +62,19 @@ namespace ShooterMashup.Player
             };
         }
 
-        static void ApplyRounded(MoveConfig c)
+        static void ApplyShooterMash(MoveConfig c)
         {
             c.mins = new Vector3(-0.45f, -0.6f, -0.45f);
             c.maxs = new Vector3(0.45f, 1.2f, 0.45f);                // 1.8 m tall
             c.standViewHeight = 1.0f;                                // eyes at 1.6 m
             c.crouchViewHeight = 0.4f;                               // crouched 1.2 m tall
-            c.proneViewHeight = -0.2f;                               // prone 1.0 m tall
+            c.proneViewHeight = -0.2f;                               // prone eyes at 0.4 m
+            c.proneHeight = 0.6f;                                    // fits under a floor on 1 m pillars (0.8 m)
             c.deadViewHeight = -0.4f;
             c.proneLegsDistance = 0.8f;
             c.proneLegsMins = new Vector3(-0.35f, -0.6f, -0.35f);
             c.proneLegsMaxs = new Vector3(0.35f, -0.35f, 0.35f);
-            c.stepSize = 0.45f;
+            c.stepSize = 0.52f;                                      // 50 cm steps, with a little margin
 
             c.speed = 8f;                                            // run 6.4, sprint 8.8 m/s
             c.gravity = 20f;
