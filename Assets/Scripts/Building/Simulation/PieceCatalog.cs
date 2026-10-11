@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 namespace ShooterMashup.Building
@@ -22,9 +23,12 @@ namespace ShooterMashup.Building
         }
     }
 
+
     /// <summary>
-    /// Greybox pieces, sized like Valheim's. Horizontal pieces snap by their top surface, so
-    /// floors end up flush with the tops of the walls, beams and posts they sit on.
+    /// Greybox pieces on a 0.5 m grid. Every piece comes in 2.5 m, 1 m and 0.5 m, and snap
+    /// points sit every 0.5 m along their edges, so whatever you build stays on the grid.
+    /// Horizontal pieces snap by their top surface, so floors end up flush with the tops of the
+    /// walls, beams and posts they sit on.
     /// </summary>
     public static class PieceCatalog
     {
@@ -32,112 +36,112 @@ namespace ShooterMashup.Building
         const float Post = 0.25f;  // pillar cross-section
         const float Beam = 0.2f;   // beam cross-section
 
-        /// <summary>Wall and pillar height for one storey. A floor on top leaves 2.3 m of headroom.</summary>
-        public const float StoreyHeight = 2.5f;
+        /// <summary>The grid all pieces and snap points line up on.</summary>
+        public const float Step = 0.5f;
+        /// <summary>The big pieces' size, and the height of one storey. A floor on top leaves 2.3 m of headroom.</summary>
+        public const float Grid = 2.5f;
+        public const float StoreyHeight = Grid;
 
-        public static readonly PieceDef[] All =
-        {
-            Floor("Floor 2x2", 2f),
-            Floor("Floor 1x1", 1f),
-            // Storeys are 2.5 m: tall walls, or 1 m + 1 m + 0.5 m pieces stacked.
-            Wall("Wall 2x2.5", 2f, StoreyHeight),
-            Wall("Wall 1x1", 1f, 1f),
-            Wall("Wall 1x0.5", 1f, 0.5f),
-            Pillar("Pillar 2.5 m", StoreyHeight),
-            Pillar("Pillar 1 m", 1f),
-            Pillar("Pillar 0.5 m", 0.5f),
-            HorizontalBeam("Beam 2 m", 2f),
-            HorizontalBeam("Beam 1 m", 1f),
-            Roof45("Roof 45° 2x2"),
-            Stairs("Stairs"),
-        };
+        static readonly float[] Sizes = { Grid, 1f, Step };
+
+        public static readonly PieceDef[] All = Build();
 
         public static PieceDef Get(int type) => type >= 0 && type < All.Length ? All[type] : null;
+
+        static PieceDef[] Build()
+        {
+            var all = new List<PieceDef>();
+            foreach (float s in Sizes) all.Add(Floor($"Floor {N(s)}x{N(s)}", s));
+            foreach (float s in Sizes) all.Add(Wall($"Wall {N(s)}x{N(s)}", s, s));
+            foreach (float s in Sizes) all.Add(Pillar($"Pillar {N(s)} m", s));
+            foreach (float s in Sizes) all.Add(HorizontalBeam($"Beam {N(s)} m", s));
+            foreach (float s in Sizes) all.Add(Roof45($"Roof 45° {N(s)}x{N(s)}", s));
+            // 27° stairs, 1 m wide, twice as long as they rise: 0.5 m up in 1 m, 1 m in 2 m, 2.5 m in 5 m.
+            foreach (float s in Sizes) all.Add(Stairs($"Stairs {N(s)} m rise", 1f, 2f * s, s));
+            return all.ToArray();
+        }
+
+        static string N(float metres) => metres.ToString("0.##", CultureInfo.InvariantCulture);
 
         static PieceDef Floor(string name, float size)
         {
             float h = size / 2f;
-            var snaps = new List<Vector3>();
-            for (int x = -1; x <= 1; x++)
-            for (int z = -1; z <= 1; z++)
-            {
-                if (x == 0 && z == 0) continue;
-                if (size < 2f && (x == 0 || z == 0)) continue; // 1x1: corners only
-                snaps.Add(new Vector3(x * h, Slab, z * h));
-            }
-            return new PieceDef(name, new[] { new Obb(new Vector3(0, Slab / 2, 0), new Vector3(size, Slab, size)) }, snaps.ToArray());
+            Vector3[] snaps = Rectangle(new Vector3(-h, Slab, -h), Vector3.right * size, Vector3.forward * size);
+            return new PieceDef(name, new[] { new Obb(new Vector3(0, Slab / 2, 0), new Vector3(size, Slab, size)) }, snaps);
         }
 
         static PieceDef Wall(string name, float width, float height)
         {
             float w = width / 2f;
-            var snaps = new List<Vector3>
-            {
-                new Vector3(-w, 0, 0), new Vector3(w, 0, 0),
-                new Vector3(-w, height, 0), new Vector3(w, height, 0),
-            };
-            if (width >= 2f)
-            {
-                // Midpoints, so 1x1 pieces can attach halfway along.
-                snaps.Add(new Vector3(0, 0, 0));
-                snaps.Add(new Vector3(0, height, 0));
-                snaps.Add(new Vector3(-w, height / 2, 0));
-                snaps.Add(new Vector3(w, height / 2, 0));
-            }
-            return new PieceDef(name, new[] { new Obb(new Vector3(0, height / 2, 0), new Vector3(width, height, Slab)) }, snaps.ToArray());
+            Vector3[] snaps = Rectangle(new Vector3(-w, 0, 0), Vector3.right * width, Vector3.up * height);
+            return new PieceDef(name, new[] { new Obb(new Vector3(0, height / 2, 0), new Vector3(width, height, Slab)) }, snaps);
         }
 
-        static PieceDef Pillar(string name, float height)
-        {
-            var snaps = new List<Vector3> { Vector3.zero, new Vector3(0, height, 0) };
-            if (height > 1f)
-                snaps.Add(new Vector3(0, height / 2, 0));
-            return new PieceDef(name, new[] { new Obb(new Vector3(0, height / 2, 0), new Vector3(Post, height, Post)) }, snaps.ToArray());
-        }
+        static PieceDef Pillar(string name, float height) =>
+            new PieceDef(name, new[] { new Obb(new Vector3(0, height / 2, 0), new Vector3(Post, height, Post)) },
+                Line(Vector3.zero, new Vector3(0, height, 0)));
 
         static PieceDef HorizontalBeam(string name, float length)
         {
             float l = length / 2f;
-            var snaps = new List<Vector3> { new Vector3(-l, Beam, 0), new Vector3(l, Beam, 0) };
-            if (length >= 2f)
-                snaps.Add(new Vector3(0, Beam, 0));
-            return new PieceDef(name, new[] { new Obb(new Vector3(0, Beam / 2, 0), new Vector3(length, Beam, Beam)) }, snaps.ToArray());
+            return new PieceDef(name, new[] { new Obb(new Vector3(0, Beam / 2, 0), new Vector3(length, Beam, Beam)) },
+                Line(new Vector3(-l, Beam, 0), new Vector3(l, Beam, 0)));
         }
 
-        static PieceDef Roof45(string name)
+        static PieceDef Roof45(string name, float size)
         {
-            // Rises 2 m over a 2 m run, from the low edge at z = -1 to the high edge at z = +1.
+            // Rises `size` over a run of `size`, from the low edge at -z to the high edge at +z.
             // The slab's top surface runs through both edges.
+            float h = size / 2f;
             Quaternion tilt = Quaternion.Euler(-45f, 0f, 0f);
             Vector3 normal = tilt * Vector3.up;
-            float length = 2f * Mathf.Sqrt(2f);
-            var slab = new Obb(new Vector3(0, 1f, 0) - normal * (Slab / 2), new Vector3(2f, Slab, length), tilt);
-            Vector3[] snaps =
-            {
-                new Vector3(-1, 0, -1), new Vector3(1, 0, -1), new Vector3(0, 0, -1),
-                new Vector3(-1, 2, 1), new Vector3(1, 2, 1), new Vector3(0, 2, 1),
-            };
-            return new PieceDef(name, new[] { slab }, snaps);
+            float length = size * Mathf.Sqrt(2f);
+            var slab = new Obb(new Vector3(0, h, 0) - normal * (Slab / 2), new Vector3(size, Slab, length), tilt);
+            var snaps = new List<Vector3>(Line(new Vector3(-h, 0, -h), new Vector3(h, 0, -h)));
+            snaps.AddRange(Line(new Vector3(-h, size, h), new Vector3(h, size, h)));
+            return new PieceDef(name, new[] { slab }, snaps.ToArray());
         }
 
-        static PieceDef Stairs(string name)
+        /// <summary>Solid 25 cm steps rising over the run, from the bottom edge at -z to the top edge at +z.</summary>
+        static PieceDef Stairs(string name, float width, float run, float rise)
         {
-            // 1 m wide, rising one storey (2.5 m) over a 2 m floor tile in ten 25 cm steps
-            // of 20 cm tread. Steep, but players step up to 52 cm.
-            const int steps = 10;
-            const float run = 2f, rise = StoreyHeight / steps, tread = run / steps;
+            const float stepRise = 0.25f;
+            int steps = Mathf.RoundToInt(rise / stepRise);
+            float tread = run / steps;
             var boxes = new Obb[steps];
             for (int k = 0; k < steps; k++)
             {
-                float h = (k + 1) * rise;
-                boxes[k] = new Obb(new Vector3(0, h / 2, -run / 2 + (k + 0.5f) * tread), new Vector3(1f, h, tread));
+                float top = (k + 1) * stepRise;
+                boxes[k] = new Obb(new Vector3(0, top / 2, -run / 2 + (k + 0.5f) * tread), new Vector3(width, top, tread));
             }
-            Vector3[] snaps =
+            float w = width / 2f, r = run / 2f;
+            var snaps = new List<Vector3>(Line(new Vector3(-w, 0, -r), new Vector3(w, 0, -r)));
+            snaps.AddRange(Line(new Vector3(-w, rise, r), new Vector3(w, rise, r)));
+            return new PieceDef(name, boxes, snaps.ToArray());
+        }
+
+        /// <summary>Points every grid step from a to b, both ends included.</summary>
+        static Vector3[] Line(Vector3 a, Vector3 b)
+        {
+            int n = Mathf.Max(1, Mathf.RoundToInt(Vector3.Distance(a, b) / Step));
+            var points = new Vector3[n + 1];
+            for (int i = 0; i <= n; i++)
+                points[i] = Vector3.Lerp(a, b, i / (float)n);
+            return points;
+        }
+
+        /// <summary>Points every grid step around a rectangle, starting at a corner and going round.</summary>
+        static Vector3[] Rectangle(Vector3 corner, Vector3 u, Vector3 v)
+        {
+            var points = new List<Vector3>();
+            Vector3[] corners = { corner, corner + u, corner + u + v, corner + v };
+            for (int e = 0; e < 4; e++)
             {
-                new Vector3(-0.5f, 0, -1), new Vector3(0.5f, 0, -1), new Vector3(0, 0, -1),
-                new Vector3(-0.5f, StoreyHeight, 1), new Vector3(0.5f, StoreyHeight, 1), new Vector3(0, StoreyHeight, 1),
-            };
-            return new PieceDef(name, boxes, snaps);
+                Vector3[] edge = Line(corners[e], corners[(e + 1) % 4]);
+                for (int i = 0; i < edge.Length - 1; i++) // the last point is the next edge's first
+                    points.Add(edge[i]);
+            }
+            return points.ToArray();
         }
     }
 }

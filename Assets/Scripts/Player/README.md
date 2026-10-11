@@ -78,6 +78,10 @@ Runtime/      Unity glue for a local player
   with a PhysX depenetration fallback. Players will get stuck in freshly placed voxels.
 - Mouse look is applied every rendered frame and the body is interpolated between ticks.
 - The prone key is edge-triggered (one press = one toggle).
+- Stepping up rises only as far as there's headroom (Quake 3's later `PM_StepSlideMove`), and
+  if a ceiling starting right above the step blocks the full-height step, lower steps are
+  tried. ET tested only the full step height, so a low ceiling blocked even small steps, e.g.
+  crawling prone onto a floor piece with another floor on 1 m pillars above it.
 - `MoveConfig.maxAirSpeed` can cap strafe-jump speed gain (0 = ET behaviour).
 - No weapons yet, so ET's weapon-specific movement rules (heavy weapons, mounted MG42,
   firing blocking lean) are left out. `MoveModifiers.speed` is the hook for slowdowns.

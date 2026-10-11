@@ -575,6 +575,39 @@ namespace ShooterMashup.Player.Tests
         }
 
         [Test]
+        public void Prone_CrawlsOntoAFloorUnderAnotherFloor()
+        {
+            // A floor (top at 0.2 m) with a second floor on 1 m pillars above it (underside at 1.0 m),
+            // reaching out past the first. Crawling in from the ground means a 0.2 m step with no room
+            // for a full step height.
+            MovePresets.Apply(cfg, MovePreset.ShooterMash);
+            Box(new Vector3(0, 0.1f, 10f), new Vector3(3f, 0.2f, 10f));   // z 5..15
+            Box(new Vector3(0, 1.1f, 9f), new Vector3(3f, 0.2f, 12f));    // z 3..15
+            Spawn(new Vector3(0, 0.6f, 0));
+            Run(Tick, buttons: CmdButtons.Prone);
+            Assert.IsTrue(st.IsProne);
+            Run(9000, forward: 127);
+            Assert.Greater(Pos.z, 10f, "prone player should crawl in");
+            Assert.AreEqual(0.8f, Pos.y, 0.02f, "and be lying on the lower floor");
+        }
+
+        [Test]
+        public void Prone_CrawlsOntoAFloorWithAnotherFloorStraightAbove()
+        {
+            // As built: a floor, 1 m pillars on it, a floor on those. Both floors have the same
+            // footprint, so the ceiling starts right above the step and a full step hits its edge.
+            MovePresets.Apply(cfg, MovePreset.ShooterMash);
+            Box(new Vector3(0, 0.1f, 10f), new Vector3(3f, 0.2f, 10f));   // z 5..15, top at 0.2
+            Box(new Vector3(0, 1.1f, 10f), new Vector3(3f, 0.2f, 10f));   // z 5..15, underside at 1.0
+            Spawn(new Vector3(0, 0.6f, 0));
+            Run(Tick, buttons: CmdButtons.Prone);
+            Assert.IsTrue(st.IsProne);
+            Run(9000, forward: 127);
+            Assert.Greater(Pos.z, 10f, "prone player should crawl in");
+            Assert.AreEqual(0.8f, Pos.y, 0.02f, "and be lying on the lower floor");
+        }
+
+        [Test]
         public void ShooterMashPreset_ProneFitsUnderAFloorOnOneMetrePillars()
         {
             // A floor on 1 m pillars has its top at 1 m and its underside at 0.8 m.

@@ -146,6 +146,25 @@ namespace ShooterMashup.EditorTools
             // A floor on 1 m pillars leaves 0.8 m: only the ShooterMash prone hull (0.6 m) fits.
             Tunnel("Low prone tunnel", new Vector3(at.x + 12, 0, at.z), 0.8f, 13, parent);
             Label("prone\n(0.8 m, not ET)", new Vector3(at.x + 12, 3.6f, at.z - 0.6f), parent);
+            BuildFloorOnPillars(new Vector3(at.x + 18, 0, at.z), parent);
+        }
+
+        /// <summary>
+        /// A copy of what you get with build pieces: a floor (0.2 m thick) on the ground, 1 m pillars on
+        /// its corners, and a floor on top flush with them. 0.8 m between the floors, and getting in
+        /// means crawling up the lower floor's 0.2 m edge with the upper floor right above it.
+        /// </summary>
+        static void BuildFloorOnPillars(Vector3 entrance, Transform parent)
+        {
+            const float width = 2.5f, length = 5f, slab = 0.2f, pillar = 1f, post = 0.25f;
+            float zc = entrance.z + length / 2;
+            Box("Lower floor", new Vector3(entrance.x, slab / 2, zc), new Vector3(width, slab, length), matTrim, parent);
+            Box("Upper floor", new Vector3(entrance.x, pillar + slab / 2, zc), new Vector3(width, slab, length), matWall, parent);
+            foreach (float x in new[] { -width / 2, width / 2 })
+            foreach (float z in new[] { 0f, length / 2, length })
+                Box("Pillar", new Vector3(entrance.x + x, slab + (pillar - slab) / 2, entrance.z + z),
+                    new Vector3(post, pillar - slab, post), matWall, parent);
+            Label("prone onto a floor\nunder a floor on\n1 m pillars (0.8 m)", new Vector3(entrance.x, 2.6f, entrance.z - 0.6f), parent);
         }
 
         static void Tunnel(string name, Vector3 entrance, float innerHeight, float length, Transform parent)
@@ -270,16 +289,16 @@ namespace ShooterMashup.EditorTools
             Box("Dig pad step", new Vector3(pad.x + 4f, 0.25f, pad.z - 0.4f), new Vector3(8f, 0.5f, 0.8f), matTrim, parent);
             Label("diggable ground\nbuild on it, then hold\nright mouse to dig", new Vector3(pad.x + 4f, 3f, pad.z - 1f), parent);
 
-            // Two diggable cliffs, 20 m apart: wood can't bridge that without a pillar, iron can.
+            // Two diggable cliffs, 30 m apart: wood can't bridge that without a pillar, iron can.
             foreach (float side in new[] { -1f, 1f })
             {
-                float inner = at.x + side * 10f;
+                float inner = at.x + side * 15f;
                 for (int i = 0; i < 3; i++)
                 for (int k = 0; k < 3; k++)
                 for (int y = 0; y < 4; y++)
                     DiggableBlockAt(new Vector3(inner + side * (i + 0.5f), y + 0.5f, at.z - 1f + k), parent);
             }
-            Label("20 m gap\nbridge it", new Vector3(at.x, 6f, at.z - 2f), parent);
+            Label("30 m gap\nbridge it", new Vector3(at.x, 6f, at.z - 2f), parent);
         }
 
         static void DiggableBlockAt(Vector3 center, Transform parent)

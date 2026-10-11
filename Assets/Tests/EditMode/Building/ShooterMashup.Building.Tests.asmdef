@@ -3,6 +3,7 @@
     "rootNamespace": "ShooterMashup.Building.Tests",
     "references": [
         "ShooterMashup.Building",
+        "ShooterMashup.Player",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

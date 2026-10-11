@@ -27,7 +27,7 @@ instead (blue grounded, then green, yellow, red as support runs out) and the pat
 the material. Lean is off while the tool is out (Q/E are used for snapping).
 
 The building area has a pad of **diggable dirt blocks** (a stand-in for voxel terrain) and two
-dirt cliffs 20 m apart for bridge tests.
+dirt cliffs 30 m apart for bridge tests (wood needs a pillar in between; iron spans it).
 
 ## Layout
 

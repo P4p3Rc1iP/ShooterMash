@@ -33,12 +33,15 @@ namespace ShooterMashup.Building.Tests
                 boxes.Any(box => actors.Any(a => Obb.Overlap(box, new Obb(a.center, a.size), 0f)));
         }
 
-        static readonly int Floor2 = Type("Floor 2x2");
-        static readonly int Wall2 = Type("Wall 2x2.5");
+        static readonly int Floor2 = Type("Floor 2.5x2.5");
+        static readonly int Wall2 = Type("Wall 2.5x2.5");
         static readonly int Pillar2 = Type("Pillar 2.5 m");
         const float PostTop = PieceCatalog.StoreyHeight;
         const float BeamY = PostTop - 0.2f; // a beam flush with the top of a post
-        static readonly int Beam2 = Type("Beam 2 m");
+        static readonly int Beam2 = Type("Beam 2.5 m");
+        const float G = PieceCatalog.Grid; // big pieces are G across
+        const float H = G / 2f;
+        static float BeamX(int k) => H + G * k; // centre of the k-th beam out from a post at the origin
 
         BuildConfig cfg;
         FakeWorld world;
@@ -86,7 +89,7 @@ namespace ShooterMashup.Building.Tests
             post = Place(Pillar2, m, Vector3.zero);
             var beams = new List<int>();
             for (int k = 0; k < count; k++)
-                beams.Add(Place(Beam2, m, new Vector3(1 + 2 * k, BeamY, 0)));
+                beams.Add(Place(Beam2, m, new Vector3(BeamX(k), BeamY, 0)));
             return beams;
         }
 
@@ -116,28 +119,28 @@ namespace ShooterMashup.Building.Tests
             Assert.AreEqual(60f, Support(beams[1]), 0.01f);
             Assert.AreEqual(40f, Support(beams[2]), 0.01f);
             Assert.AreEqual(20f, Support(beams[3]), 0.01f);
-            Assert.AreEqual(BuildFailure.Unsupported, TryPlace(Beam2, BuildMaterial.Wood, new Vector3(9, BeamY, 0)).failure);
+            Assert.AreEqual(BuildFailure.Unsupported, TryPlace(Beam2, BuildMaterial.Wood, new Vector3(BeamX(4), BeamY, 0)).failure);
         }
 
         [Test]
         public void Stone_CannotBuildSideways()
         {
             Place(Pillar2, BuildMaterial.Stone, Vector3.zero);
-            Assert.AreEqual(BuildFailure.Unsupported, TryPlace(Beam2, BuildMaterial.Stone, new Vector3(1, BeamY, 0)).failure);
+            Assert.AreEqual(BuildFailure.Unsupported, TryPlace(Beam2, BuildMaterial.Stone, new Vector3(BeamX(0), BeamY, 0)).failure);
         }
 
         [Test]
         public void Iron_ReachesTwelveBeamsOut()
         {
             PostWithBeams(BuildMaterial.Iron, 12, out _);
-            Assert.AreEqual(BuildFailure.Unsupported, TryPlace(Beam2, BuildMaterial.Iron, new Vector3(25, BeamY, 0)).failure);
+            Assert.AreEqual(BuildFailure.Unsupported, TryPlace(Beam2, BuildMaterial.Iron, new Vector3(BeamX(12), BeamY, 0)).failure);
         }
 
         [Test]
         public void StonePost_HoldsWoodBeamsLikeAWoodPost()
         {
             Place(Pillar2, BuildMaterial.Stone, Vector3.zero);
-            int beam = Place(Beam2, BuildMaterial.Wood, new Vector3(1, BeamY, 0));
+            int beam = Place(Beam2, BuildMaterial.Wood, new Vector3(BeamX(0), BeamY, 0));
             Assert.AreEqual(80f, Support(beam), 0.01f); // capped at wood's 100 first
         }
 
@@ -145,13 +148,13 @@ namespace ShooterMashup.Building.Tests
         public void Bridge_IsSupportedFromBothEnds()
         {
             Place(Pillar2, BuildMaterial.Wood, Vector3.zero);
-            int far = Place(Pillar2, BuildMaterial.Wood, new Vector3(12, 0, 0));
+            int far = Place(Pillar2, BuildMaterial.Wood, new Vector3(6 * G, 0, 0));
             var beams = new List<int>();
             for (int k = 0; k < 4; k++)
-                beams.Add(Place(Beam2, BuildMaterial.Wood, new Vector3(1 + 2 * k, BeamY, 0)));
+                beams.Add(Place(Beam2, BuildMaterial.Wood, new Vector3(BeamX(k), BeamY, 0)));
             // The fifth beam alone would fail; build the last one off the far post first.
-            int last = Place(Beam2, BuildMaterial.Wood, new Vector3(11, BeamY, 0));
-            int middle = Place(Beam2, BuildMaterial.Wood, new Vector3(9, BeamY, 0));
+            int last = Place(Beam2, BuildMaterial.Wood, new Vector3(BeamX(5), BeamY, 0));
+            int middle = Place(Beam2, BuildMaterial.Wood, new Vector3(BeamX(4), BeamY, 0));
             Assert.AreEqual(60f, Support(middle), 0.01f);
 
             BuildResult r = Remove(far);
@@ -162,7 +165,7 @@ namespace ShooterMashup.Building.Tests
         public void AddingAPost_RaisesSupportOfWhatItHolds()
         {
             List<int> beams = PostWithBeams(BuildMaterial.Wood, 4, out _);
-            Place(Pillar2, BuildMaterial.Wood, new Vector3(8, 0, 0)); // under the end of the last beam
+            Place(Pillar2, BuildMaterial.Wood, new Vector3(4 * G, 0, 0)); // under the end of the last beam
             Assert.AreEqual(80f, Support(beams[3]), 0.01f);
             Assert.AreEqual(60f, Support(beams[2]), 0.01f);
         }
@@ -249,7 +252,7 @@ namespace ShooterMashup.Building.Tests
         public void Undo_GoesBackOneStepAtATime()
         {
             int post = Place(Pillar2, BuildMaterial.Wood, Vector3.zero);
-            int beam = Place(Beam2, BuildMaterial.Wood, new Vector3(1, BeamY, 0));
+            int beam = Place(Beam2, BuildMaterial.Wood, new Vector3(BeamX(0), BeamY, 0));
             Assert.IsTrue(Undo().Ok);
             Assert.IsNull(sys.Get(beam));
             Assert.IsNotNull(sys.Get(post));
@@ -270,7 +273,7 @@ namespace ShooterMashup.Building.Tests
         public void Undo_IsRefusedOnceSomeoneElseBuiltThere()
         {
             Place(Pillar2, BuildMaterial.Wood, Vector3.zero, owner: 0);
-            Place(Beam2, BuildMaterial.Wood, new Vector3(1, BeamY, 0), owner: 1);
+            Place(Beam2, BuildMaterial.Wood, new Vector3(BeamX(0), BeamY, 0), owner: 1);
             Assert.AreEqual(BuildFailure.StructureChanged, Undo(0).failure);
             Assert.IsTrue(Undo(1).Ok); // their own is fine
         }
@@ -298,11 +301,11 @@ namespace ShooterMashup.Building.Tests
         public void Wall_SnapsOntoTheEdgeOfAFloor_StandingOnIt()
         {
             int floor = Place(Floor2, BuildMaterial.Wood, Vector3.zero);
-            SnapResult s = Snap(Wall2, new Vector3(0.95f, 0.2f, 0.1f), Vector3.up, 90f);
+            SnapResult s = Snap(Wall2, new Vector3(H - 0.05f, 0.2f, 0.1f), Vector3.up, 90f);
             Assert.IsTrue(s.snapped);
             Assert.AreEqual(floor, s.targetId);
             // Not hanging below the floor, though that lines up just as many snap points.
-            AssertNear(new Vector3(1, 0.2f, 0), s.position);
+            AssertNear(new Vector3(H, 0.2f, 0), s.position);
             Assert.IsTrue(sys.CheckPlace(Wall2, BuildMaterial.Wood, s.position, s.rotation).Valid);
         }
 
@@ -311,59 +314,72 @@ namespace ShooterMashup.Building.Tests
         {
             Place(Floor2, BuildMaterial.Wood, Vector3.zero);
             // Standing on it, looking at the floor just inside its +x edge.
-            AssertNear(new Vector3(2, 0, 0), Snap(Floor2, new Vector3(0.8f, 0.2f, 0.1f), Vector3.up).position);
+            AssertNear(new Vector3(G, 0, 0), Snap(Floor2, new Vector3(H - 0.2f, 0.2f, 0.1f), Vector3.up).position);
             // Or at the ground just beyond that edge.
-            AssertNear(new Vector3(2, 0, 0), Snap(Floor2, new Vector3(1.4f, 0f, -0.2f), Vector3.up).position);
+            AssertNear(new Vector3(G, 0, 0), Snap(Floor2, new Vector3(H + 0.4f, 0f, -0.2f), Vector3.up).position);
         }
 
         [Test]
         public void Floor_AimedNearACorner_LinesUpWithAnEdge()
         {
             Place(Floor2, BuildMaterial.Wood, Vector3.zero);
-            SnapResult s = Snap(Floor2, new Vector3(0.85f, 0.2f, 0.75f), Vector3.up);
+            SnapResult s = Snap(Floor2, new Vector3(H - 0.15f, 0.2f, H - 0.25f), Vector3.up);
             Assert.IsTrue(s.snapped);
             // Beside it on one side or the other, sharing a whole edge; never overlapping or half offset.
-            Assert.IsTrue(Near(s.position, new Vector3(2, 0, 0)) || Near(s.position, new Vector3(0, 0, 2)), s.position.ToString());
+            Assert.IsTrue(Near(s.position, new Vector3(G, 0, 0)) || Near(s.position, new Vector3(0, 0, G)), s.position.ToString());
         }
 
         [Test]
         public void Snap_NeverPutsAPieceInsideAnother()
         {
-            // A 2x2 floor already sits next to the first one: aiming at the shared edge must not stack.
+            // A floor already sits next to the first one: aiming near their shared edge must not stack.
             Place(Floor2, BuildMaterial.Wood, Vector3.zero);
-            Place(Floor2, BuildMaterial.Wood, new Vector3(2, 0, 0));
-            SnapResult s = Snap(Floor2, new Vector3(1.05f, 0.2f, 0.2f), Vector3.up);
+            Place(Floor2, BuildMaterial.Wood, new Vector3(G, 0, 0));
+            SnapResult s = Snap(Floor2, new Vector3(H + 0.05f, 0.2f, H - 0.1f), Vector3.up);
             Assert.IsTrue(s.snapped);
-            Assert.IsFalse(Near(s.position, Vector3.zero) || Near(s.position, new Vector3(2, 0, 0)), s.position.ToString());
+            Assert.IsFalse(Near(s.position, Vector3.zero) || Near(s.position, new Vector3(G, 0, 0)), s.position.ToString());
+        }
+
+        [Test]
+        public void SmallPieces_TileAlongABigOne()
+        {
+            // 1 + 1 + 0.5 floors along a big floor's edge end exactly at its corner.
+            Place(Floor2, BuildMaterial.Wood, Vector3.zero);
+            int f1 = Type("Floor 1x1"), f05 = Type("Floor 0.5x0.5");
+            Place(f1, BuildMaterial.Wood, new Vector3(H + 0.5f, 0, -H + 0.5f));
+            Place(f1, BuildMaterial.Wood, new Vector3(H + 0.5f, 0, -H + 1.5f));
+            int last = Place(f05, BuildMaterial.Wood, new Vector3(H + 0.25f, 0, -H + 2.25f));
+            Piece p = sys.Get(last);
+            Assert.AreEqual(H, p.bounds.max.z, 1e-4f);
         }
 
         [Test]
         public void ForcedSnapPoint_AttachesWhereYouAim()
         {
             Place(Floor2, BuildMaterial.Wood, Vector3.zero);
-            // Floor snap point 0 is its (-1, ., -1) corner. Aim at the existing floor's (1, ., 1) corner.
-            SnapResult s = Snap(Floor2, new Vector3(0.9f, 0.2f, 0.95f), Vector3.up, held: 0);
+            // Force the new floor's (-H, ., -H) corner onto the existing floor's (H, ., H) corner.
+            SnapResult s = Snap(Floor2, new Vector3(H - 0.1f, 0.2f, H - 0.05f), Vector3.up, held: Held(Floor2, new Vector3(-H, 0.2f, -H)));
             Assert.IsTrue(s.snapped);
-            Assert.AreEqual(0, s.heldIndex);
-            AssertNear(new Vector3(2, 0, 2), s.position); // diagonal, as asked for
+            Assert.AreEqual(Held(Floor2, new Vector3(-H, 0.2f, -H)), s.heldIndex);
+            AssertNear(new Vector3(G, 0, G), s.position); // diagonal, as asked for
         }
 
         [Test]
         public void ForcedSnapPoint_OnABeam()
         {
             Place(Pillar2, BuildMaterial.Wood, Vector3.zero);
-            // Beam snap points: 0 = left end, 1 = right end, 2 = middle. Right end onto the post top.
-            SnapResult s = Snap(Beam2, new Vector3(0.05f, PostTop, 0), Vector3.up, held: 1);
+            // Force the beam's right end onto the post top.
+            SnapResult s = Snap(Beam2, new Vector3(0.05f, PostTop, 0), Vector3.up, held: Held(Beam2, new Vector3(H, 0.2f, 0)));
             Assert.IsTrue(s.snapped);
-            Assert.AreEqual(1, s.heldIndex);
-            AssertNear(new Vector3(-1, BeamY, 0), s.position);
+            Assert.AreEqual(Held(Beam2, new Vector3(H, 0.2f, 0)), s.heldIndex);
+            AssertNear(new Vector3(-H, BeamY, 0), s.position);
         }
 
         [Test]
         public void Snap_KeepsTheWorldRotation()
         {
             Place(Floor2, BuildMaterial.Wood, Vector3.zero, yaw: 30f);
-            Vector3 aim = Quaternion.Euler(0, 30, 0) * new Vector3(1.3f, 0.2f, 0.1f); // just past its local +x edge
+            Vector3 aim = Quaternion.Euler(0, 30, 0) * new Vector3(H + 0.3f, 0.2f, 0.1f); // just past its local +x edge
             SnapResult s = Snap(Floor2, aim, Vector3.up, yaw: 0f);
             Assert.IsTrue(s.snapped);
             Assert.That(Quaternion.Angle(s.rotation, Quaternion.identity), Is.LessThan(0.01f));
@@ -374,11 +390,11 @@ namespace ShooterMashup.Building.Tests
         {
             int floor = Place(Floor2, BuildMaterial.Wood, Vector3.zero, yaw: 30f);
             Quaternion r = Quaternion.Euler(0, 30, 0);
-            Vector3 aim = r * new Vector3(1.3f, 0.2f, 0.1f);
+            Vector3 aim = r * new Vector3(H + 0.3f, 0.2f, 0.1f);
             SnapResult s = Snap(Floor2, aim, Vector3.up, yaw: 30f); // as after copying it
             Assert.IsTrue(s.snapped);
             Assert.AreEqual(floor, s.targetId);
-            AssertNear(r * new Vector3(2, 0, 0), s.position);
+            AssertNear(r * new Vector3(G, 0, 0), s.position);
             Assert.IsTrue(TryPlace(Floor2, BuildMaterial.Wood, s.position, 30f).Ok);
         }
 
@@ -386,20 +402,45 @@ namespace ShooterMashup.Building.Tests
         public void NothingInReach_DoesNotSnap()
         {
             Place(Floor2, BuildMaterial.Wood, Vector3.zero);
-            Assert.IsFalse(Snap(Floor2, new Vector3(4f, 0f, 0f), Vector3.up).snapped);
+            Assert.IsFalse(Snap(Floor2, new Vector3(H + 3f, 0f, 0f), Vector3.up).snapped);
         }
 
         [Test]
         public void LooserOverlapLimit_LetsPiecesGoInsideEachOther()
         {
             Place(Floor2, BuildMaterial.Wood, Vector3.zero);
-            // Floor snap point 4 is the middle of its +z edge. Onto the existing floor's +x edge middle,
-            // the new floor covers a quarter of the old one.
-            var aim = new Vector3(0.95f, 0.2f, 0.05f);
-            AssertNear(new Vector3(1, 0, -1), Snap(Floor2, aim, Vector3.up, held: 4, overlap: 0.95f).position);
-            Assert.IsFalse(Near(new Vector3(1, 0, -1), Snap(Floor2, aim, Vector3.up, held: 4).position));
+            // The new floor's (0.25, ., H) point onto the existing floor's (H, ., 0.25) point:
+            // the new floor then covers about a third of the old one.
+            int held = Held(Floor2, new Vector3(0.25f, 0.2f, H));
+            var aim = new Vector3(H - 0.05f, 0.2f, 0.3f);
+            var overlapping = new Vector3(H - 0.25f, 0, 0.25f - H);
+            AssertNear(overlapping, Snap(Floor2, aim, Vector3.up, held: held, overlap: 0.95f).position);
+            Assert.IsFalse(Near(overlapping, Snap(Floor2, aim, Vector3.up, held: held).position));
             // Even a loose limit refuses an exact duplicate.
-            Assert.IsFalse(Near(Vector3.zero, Snap(Floor2, aim, Vector3.up, held: 6, overlap: 0.95f).position));
+            SnapResult duplicate = Snap(Floor2, aim, Vector3.up, held: Held(Floor2, new Vector3(H, 0.2f, 0.25f)), overlap: 0.95f);
+            Assert.IsFalse(duplicate.snapped && Near(Vector3.zero, duplicate.position));
+        }
+
+        [Test]
+        public void AllSnapPoints_AreOnTheHalfMetreGrid()
+        {
+            // Any two snap points of a piece are a whole number of grid steps apart on every axis,
+            // so snapping can never take a structure off the grid.
+            foreach (PieceDef def in PieceCatalog.All)
+            foreach (Vector3 a in def.snapPoints)
+            foreach (Vector3 b in def.snapPoints)
+                for (int axis = 0; axis < 3; axis++)
+                {
+                    float steps = (a[axis] - b[axis]) / PieceCatalog.Step;
+                    Assert.AreEqual(Mathf.Round(steps), steps, 1e-4f, $"{def.name}: {a} vs {b}");
+                }
+        }
+
+        static int Held(int type, Vector3 local)
+        {
+            int i = Array.FindIndex(PieceCatalog.All[type].snapPoints, p => (p - local).sqrMagnitude < 1e-6f);
+            Assert.GreaterOrEqual(i, 0, $"{PieceCatalog.All[type].name} has no snap point at {local}");
+            return i;
         }
 
         SnapResult Snap(int type, Vector3 aim, Vector3 normal, float yaw = 0f, int held = -1, float overlap = BuildSnapping.DefaultOverlapLimit) =>

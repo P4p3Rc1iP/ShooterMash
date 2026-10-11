@@ -49,9 +49,12 @@ Key decisions so far:
 Code is in `Assets/Scripts/Building/`; read its `README.md` first. First prototype, Valheim-inspired.
 
 Agreed with the owner:
-- Storeys are 2.5 m (2x2.5 walls, 2.5 m pillars and stairs; a floor on top leaves 2.3 m
-  headroom for the 1.8 m player). 1 m and 0.5 m pieces stack to the same height.
-- Valheim-style pieces (2x2 floors, 2x2.5 walls as the norm, 1x1 for detail) that snap, or place
+- Everything is on a universal 0.5 m grid. Every piece (floor, wall, pillar, beam, 45° roof,
+  stairs) comes in 2.5 m, 1 m and 0.5 m, and snap points sit every 0.5 m along edges, so
+  structures never drift off the grid (a test checks this). Storeys are 2.5 m (a floor on top
+  leaves 2.3 m headroom for the 1.8 m player). Stairs are 27°, 1 m wide, and rise 0.5, 1 or
+  2.5 m over twice that length (the owner liked the 27° slope and the in-between heights).
+- Valheim-style pieces that snap, or place
   freely with Shift. Q/E pick the snap point (and then allow overlaps), R cycles rotation steps
   (90, 45, 22.5, 15, free). Hold RMB to remove, MMB opens the menu. Rotation is always
   world space, also when snapping; Shift+MMB copies the aimed piece (shape, material,
@@ -71,6 +74,9 @@ Agreed with the owner:
   yet, which is the main risk there.
 
 ## To-do / open questions
+
+- **Next session (agreed 2026-10-12), remind the owner to look into:** stair width (stairs are
+  1 m wide only), ladders (as buildable pieces), and roofs (only plain 45° slabs so far).
 
 - Sprinting in big open terrain. Ideas raised but not built: soft sprint falloff as stamina runs
   low, open-world tuning (bigger bar, regen while walking), and a long-term fatigue layer that

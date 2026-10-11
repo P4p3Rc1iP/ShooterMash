@@ -182,40 +182,53 @@ namespace ShooterMashup.Player
 
             Vector3 downO = ps.origin;
             Vector3 downV = ps.velocity;
+            float downImpact = impactSpeed;
 
-            // Can we stand a step higher?
+            // Rise up to a step higher, as far as there's room. (ET only tests the full step height,
+            // so a low ceiling blocked even small steps. This is Quake 3's later version.)
             Vector3 up = startO;
             up.y += cfg.stepSize;
-            trace = TraceAll(up, up);
+            trace = TraceAll(startO, up);
             if (trace.allSolid)
                 return;
+            float stepHeight = trace.endPos.y - startO.y;
 
-            // Try the slide from up there.
-            ps.origin = up;
-            ps.velocity = startV;
-            SlideMove(gravity);
-
-            // Push back down.
-            down = ps.origin;
-            down.y -= cfg.stepSize;
-
-            if (ps.IsProne)
+            if (!TryStep(startO, startV, stepHeight, gravity))
             {
-                // Legs don't step, they just fuzz.
-                TraceResult legs = TraceLegs(ps.origin, down, default, false, ps.viewAngles.y, out _);
-                if (legs.allSolid)
-                {
-                    ps.origin = downO;
-                    ps.velocity = downV;
-                    return;
-                }
+                ps.origin = downO;
+                ps.velocity = downV;
+                return;
             }
 
-            trace = world.Trace(ps.origin, down, mins, maxs);
-            if (!trace.allSolid)
-                ps.origin = trace.endPos;
-            if (trace.fraction < 1f)
-                ps.velocity = ClipVelocity(ps.velocity, trace.normal);
+            // Not ET: a ceiling that starts right above the step (crawling onto a floor with another
+            // floor on short pillars over it) blocks the slide from the full step height. If that
+            // got us no further than staying down, try lower steps and keep whichever goes furthest.
+            float progress = HorizontalDistance(ps.origin, startO);
+            if (progress <= HorizontalDistance(downO, startO) + 0.001f)
+            {
+                Vector3 bestO = ps.origin, bestV = ps.velocity;
+                float bestImpact = impactSpeed;
+                for (int i = 3; i >= 1; i--)
+                {
+                    float h = stepHeight * i / 4f;
+                    if (h < 2f * Inch)
+                        break;
+                    impactSpeed = downImpact;
+                    if (!TryStep(startO, startV, h, gravity))
+                        continue;
+                    float p = HorizontalDistance(ps.origin, startO);
+                    if (p > progress + 0.001f)
+                    {
+                        progress = p;
+                        bestO = ps.origin;
+                        bestV = ps.velocity;
+                        bestImpact = impactSpeed;
+                    }
+                }
+                ps.origin = bestO;
+                ps.velocity = bestV;
+                impactSpeed = bestImpact;
+            }
 
             // Step event, used by the view to smooth the camera. (ET rounds it to 4/8/12/16 qu
             // for the network; we send the real height.)
@@ -223,5 +236,36 @@ namespace ShooterMashup.Player
             if (delta > 2f * Inch)
                 Events.Add(new PmEvent { type = PmEventType.StepUp, value = delta });
         }
+
+        /// <summary>
+        /// From start, rise by height, slide, and push back down by the same amount. Leaves the
+        /// result in ps. Returns false if prone legs would end up inside something.
+        /// </summary>
+        bool TryStep(Vector3 start, Vector3 velocity, float height, bool gravity)
+        {
+            ps.origin = start + Vector3.up * height;
+            ps.velocity = velocity;
+            SlideMove(gravity);
+
+            Vector3 down = ps.origin;
+            down.y -= height;
+
+            if (ps.IsProne)
+            {
+                // Legs don't step, they just fuzz.
+                TraceResult legs = TraceLegs(ps.origin, down, default, false, ps.viewAngles.y, out _);
+                if (legs.allSolid)
+                    return false;
+            }
+
+            TraceResult trace = world.Trace(ps.origin, down, mins, maxs);
+            if (!trace.allSolid)
+                ps.origin = trace.endPos;
+            if (trace.fraction < 1f)
+                ps.velocity = ClipVelocity(ps.velocity, trace.normal);
+            return true;
+        }
+
+        static float HorizontalDistance(Vector3 a, Vector3 b) => new Vector2(a.x - b.x, a.z - b.z).magnitude;
     }
 }

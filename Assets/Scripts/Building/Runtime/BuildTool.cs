@@ -462,7 +462,7 @@ namespace ShooterMashup.Building
                 style = new GUIStyle(GUI.skin.label) { fontSize = 14, richText = true, alignment = TextAnchor.LowerCenter };
                 style.normal.textColor = Color.white;
                 bigStyle = new GUIStyle(style) { fontSize = 22, alignment = TextAnchor.MiddleCenter };
-                buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 14, imagePosition = ImagePosition.ImageAbove };
+                buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 13, wordWrap = true, imagePosition = ImagePosition.ImageAbove };
                 selectedStyle = new GUIStyle(buttonStyle) { fontStyle = FontStyle.Bold };
                 selectedStyle.normal.textColor = new Color(1f, 0.85f, 0.3f);
                 selectedStyle.hover.textColor = selectedStyle.normal.textColor;
@@ -509,7 +509,7 @@ namespace ShooterMashup.Building
 
         void DrawMenu()
         {
-            const int columns = 5;
+            const int columns = 6;
             const float tile = 132f, tileHeight = 158f;
             int rows = (PieceCatalog.All.Length + columns - 1) / columns;
             float width = columns * (tile + 4f) + 32f, height = rows * (tileHeight + 4f) + 130f;
