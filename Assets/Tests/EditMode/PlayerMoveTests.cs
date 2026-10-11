@@ -1,0 +1,614 @@
+using System.Collections.Generic;
+using System.Linq;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace ShooterMashup.Player.Tests
+{
+    /// <summary>
+    /// Runs the movement simulation against real Unity colliders and checks it against
+    /// Enemy Territory's numbers (converted to metres). Geometry is built far from the origin
+    /// and removed afterwards.
+    /// </summary>
+    public class PlayerMoveTests
+    {
+        static readonly Vector3 Base = new Vector3(500f, 0f, 500f); // away from any scene content
+        const int Tick = 8;
+        const float StandOriginY = 0.6096f; // origin height when standing on the floor
+        const float SpeedTolerance = 0.03f;
+
+        MoveConfig cfg;
+        PlayerMove pmove;
+        PlayerState st;
+        int time;
+        readonly List<GameObject> objects = new List<GameObject>();
+        readonly List<PmEvent> events = new List<PmEvent>();
+
+        [SetUp]
+        public void SetUp()
+        {
+            cfg = new MoveConfig();
+            pmove = new PlayerMove(cfg, new UnityPmoveWorld(Physics.DefaultRaycastLayers));
+            time = 1000;
+            events.Clear();
+            Box(new Vector3(0, -0.4f, 0), new Vector3(100, 0.8f, 100)); // floor, top at y = 0
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            foreach (GameObject go in objects)
+                Object.DestroyImmediate(go);
+            objects.Clear();
+            Physics.SyncTransforms();
+        }
+
+        // ------------------------------------------------------------------ harness
+
+        GameObject Box(Vector3 center, Vector3 size, Quaternion? rotation = null)
+        {
+            var go = new GameObject("TestBox");
+            go.transform.SetPositionAndRotation(Base + center, rotation ?? Quaternion.identity);
+            go.AddComponent<BoxCollider>().size = size;
+            objects.Add(go);
+            Physics.SyncTransforms();
+            return go;
+        }
+
+        void Spawn(Vector3 origin, float yaw = 0f)
+        {
+            st = PlayerState.Spawn(Base + origin, cfg, time);
+            st.viewAngles = new Vector2(0f, yaw);
+            st.deltaAngles = new Vector2(0f, yaw);
+        }
+
+        void SpawnOnFloor(float x = 0f, float z = 0f, float yaw = 0f) => Spawn(new Vector3(x, StandOriginY, z), yaw);
+
+        Vector3 Pos => st.origin - Base;
+        float HorizontalSpeed => new Vector2(st.velocity.x, st.velocity.z).magnitude;
+
+        void Run(int ms, int forward = 0, int right = 0, int up = 0, CmdButtons buttons = CmdButtons.None,
+            float pitch = 0f, DoubleTap doubleTap = DoubleTap.None)
+        {
+            for (int t = 0; t < ms; t += Tick)
+            {
+                time += Tick;
+                var cmd = new PlayerCmd
+                {
+                    serverTime = time,
+                    forwardMove = (sbyte)forward,
+                    rightMove = (sbyte)right,
+                    upMove = (sbyte)up,
+                    pitch = pitch,
+                    buttons = buttons,
+                    doubleTap = t == 0 ? doubleTap : DoubleTap.None,
+                };
+                pmove.Move(ref st, cmd);
+                events.AddRange(pmove.Events);
+            }
+        }
+
+        void Settle() => Run(200);
+
+        // ------------------------------------------------------------------ ground speeds
+
+        [Test]
+        public void StandingOnFloor_IsGroundedAndStill()
+        {
+            SpawnOnFloor();
+            Run(500);
+            Assert.IsTrue(st.onGround);
+            Assert.AreEqual(StandOriginY, Pos.y, 0.01f);
+            Assert.AreEqual(0f, st.velocity.magnitude, 0.001f);
+        }
+
+        [Test]
+        public void RunSpeed_Is6Point5()
+        {
+            SpawnOnFloor();
+            Run(1500, forward: 127);
+            Assert.AreEqual(6.5024f, HorizontalSpeed, SpeedTolerance);
+            Assert.Greater(Pos.z, 5f);
+        }
+
+        [Test]
+        public void DiagonalRun_IsNotFaster()
+        {
+            SpawnOnFloor();
+            Run(1500, forward: 127, right: 127);
+            Assert.AreEqual(6.5024f, HorizontalSpeed, SpeedTolerance);
+        }
+
+        [Test]
+        public void SprintSpeed_Is8Point9()
+        {
+            SpawnOnFloor();
+            Run(1000, forward: 127, buttons: CmdButtons.Sprint);
+            Assert.AreEqual(8.9408f, HorizontalSpeed, SpeedTolerance);
+        }
+
+        [Test]
+        public void WalkSpeed_IsHalfOfRun()
+        {
+            SpawnOnFloor();
+            Run(1500, forward: 64, buttons: CmdButtons.Walk);
+            Assert.AreEqual(8.128f * 64f / 127f * 0.8f, HorizontalSpeed, SpeedTolerance);
+        }
+
+        [Test]
+        public void CrouchSpeed_Is2()
+        {
+            SpawnOnFloor();
+            Run(1500, forward: 127, up: -127);
+            Assert.IsTrue(st.IsDucked);
+            Assert.AreEqual(2.032f, HorizontalSpeed, SpeedTolerance);
+        }
+
+        [Test]
+        public void ProneSpeed_Is1Point7()
+        {
+            SpawnOnFloor();
+            Run(Tick, buttons: CmdButtons.Prone);
+            Assert.IsTrue(st.IsProne);
+            Run(1500, forward: 127);
+            Assert.AreEqual(8.128f * 0.21f, HorizontalSpeed, SpeedTolerance);
+        }
+
+        [Test]
+        public void Friction_StopsQuickly()
+        {
+            SpawnOnFloor();
+            Run(1000, forward: 127);
+            Run(400);
+            Assert.AreEqual(0f, HorizontalSpeed, 0.001f);
+        }
+
+        // ------------------------------------------------------------------ jumping
+
+        [Test]
+        public void JumpApex_IsOnePointOneSixMetres()
+        {
+            SpawnOnFloor();
+            Settle();
+            float start = Pos.y, apex = start;
+            Run(Tick, up: 127);
+            for (int i = 0; i < 100; i++)
+            {
+                Run(Tick);
+                apex = Mathf.Max(apex, Pos.y);
+            }
+            // v^2 / 2g = 6.858^2 / 40.64
+            Assert.AreEqual(1.1573f, apex - start, 0.02f);
+            Assert.IsTrue(st.onGround, $"y {Pos.y} v {st.velocity}");
+        }
+
+        [Test]
+        public void Jump_HasCooldownAndCostsStamina()
+        {
+            SpawnOnFloor();
+            Settle();
+            var jumpTimes = new List<int>();
+            for (int i = 0; i < 300; i++)
+            {
+                // Tap jump every other tick.
+                Run(Tick, up: i % 2 == 0 ? 127 : 0);
+                if (pmove.Events.Any(e => e.type == PmEventType.Jump))
+                    jumpTimes.Add(time);
+            }
+            Assert.GreaterOrEqual(jumpTimes.Count, 2);
+            for (int i = 1; i < jumpTimes.Count; i++)
+                Assert.GreaterOrEqual(jumpTimes[i] - jumpTimes[i - 1], cfg.jumpCooldownMs);
+            Assert.Less(st.stamina, 1f);
+        }
+
+        [Test]
+        public void HoldingJump_OnlyJumpsOnce()
+        {
+            SpawnOnFloor();
+            Settle();
+            events.Clear();
+            Run(3000, up: 127);
+            Assert.AreEqual(1, events.Count(e => e.type == PmEventType.Jump));
+        }
+
+        // ------------------------------------------------------------------ stamina
+
+        [Test]
+        public void Sprint_DrainsInFourSeconds_ThenRuns()
+        {
+            SpawnOnFloor();
+            Run(3800, forward: 127, buttons: CmdButtons.Sprint);
+            Assert.Greater(st.stamina, 0f);
+            Run(400, forward: 127, buttons: CmdButtons.Sprint);
+            Assert.AreEqual(0f, st.stamina, 1e-4f);
+            Run(500, forward: 127, buttons: CmdButtons.Sprint);
+            Assert.AreEqual(6.5024f, HorizontalSpeed, SpeedTolerance);
+        }
+
+        [Test]
+        public void Stamina_RegeneratesFasterAboveAQuarter()
+        {
+            SpawnOnFloor();
+            st.stamina = 0f;
+            Run(1000);
+            Assert.AreEqual(0.025f, st.stamina, 0.001f);
+            st.stamina = 0.5f;
+            Run(1000);
+            Assert.AreEqual(0.55f, st.stamina, 0.001f);
+        }
+
+        // ------------------------------------------------------------------ modifiers
+
+        [Test]
+        public void SpeedModifier_ScalesRunSpeed()
+        {
+            SpawnOnFloor();
+            st.modifiers.speed = 0.5f;
+            Run(1500, forward: 127);
+            Assert.AreEqual(6.5024f * 0.5f, HorizontalSpeed, SpeedTolerance);
+        }
+
+        [Test]
+        public void StaminaMax_ExtendsSprint()
+        {
+            SpawnOnFloor();
+            st.modifiers.staminaMax = 2f;
+            st.stamina = 2f;
+            Run(7800, forward: 127, buttons: CmdButtons.Sprint);
+            Assert.Greater(st.stamina, 0f);
+            Assert.AreEqual(8.9408f, HorizontalSpeed, SpeedTolerance);
+            Run(400, forward: 127, buttons: CmdButtons.Sprint);
+            Assert.AreEqual(0f, st.stamina, 1e-4f);
+        }
+
+        [Test]
+        public void StaminaCost_ScalesSprintAndJumpCost()
+        {
+            SpawnOnFloor();
+            st.modifiers.staminaCost = 0.5f;
+            Run(1000, forward: 127, buttons: CmdButtons.Sprint);
+            Assert.AreEqual(1f - 0.125f, st.stamina, 0.001f);
+
+            st.stamina = 1f;
+            Run(Tick, up: 127);
+            Assert.AreEqual(1f - 0.0625f, st.stamina, 0.001f);
+        }
+
+        [Test]
+        public void StaminaRegen_ScalesRegeneration()
+        {
+            SpawnOnFloor();
+            st.modifiers.staminaRegen = 2f;
+            st.stamina = 0f;
+            Run(1000);
+            Assert.AreEqual(0.05f, st.stamina, 0.001f);
+        }
+
+        [Test]
+        public void LoweringStaminaMax_ClampsStamina()
+        {
+            SpawnOnFloor();
+            st.modifiers.staminaMax = 0.5f;
+            Run(Tick);
+            Assert.AreEqual(0.5f, st.stamina, 1e-4f);
+            Assert.AreEqual(1f, st.StaminaFraction, 1e-4f);
+        }
+
+        // ------------------------------------------------------------------ steps and slopes
+
+        [TestCase(0.2f, true)]
+        [TestCase(0.4f, true)]
+        [TestCase(0.45f, true)]
+        [TestCase(0.5f, false)]
+        public void Steps_UpToStepSize(float riser, bool climbable)
+        {
+            const float tread = 0.8f;
+            for (int k = 0; k < 6; k++)
+            {
+                float h = (k + 1) * riser;
+                Box(new Vector3(0, h / 2, 2.5f + k * tread + tread / 2), new Vector3(3.2f, h, tread));
+            }
+            float top = 6 * riser;
+            float stairsEnd = 2.5f + 6 * tread;
+            Box(new Vector3(0, top / 2, stairsEnd + 13f), new Vector3(3.2f, top, 26f)); // landing
+
+            SpawnOnFloor();
+            Run(2000, forward: 127);
+            if (climbable)
+                Assert.AreEqual(StandOriginY + top, Pos.y, 0.03f, "should have climbed the stairs");
+            else
+                Assert.AreEqual(StandOriginY, Pos.y, 0.03f, "should be blocked at the bottom");
+        }
+
+        [Test]
+        public void StepUp_RaisesEventWithHeight()
+        {
+            Box(new Vector3(0, 0.2f, 2.5f), new Vector3(3.2f, 0.4f, 0.8f));
+            SpawnOnFloor();
+            Run(1000, forward: 127);
+            Assert.IsTrue(events.Any(e => e.type == PmEventType.StepUp && Mathf.Abs(e.value - 0.4f) < 0.02f),
+                string.Join(", ", events));
+        }
+
+        [TestCase(30f, true)]
+        [TestCase(44f, true)]
+        [TestCase(50f, false)]
+        public void Slopes_WalkableBelow45Point6Degrees(float angle, bool walkable)
+        {
+            float rad = angle * Mathf.Deg2Rad;
+            const float length = 13f, thick = 0.4f;
+            var dir = new Vector3(0, Mathf.Sin(rad), Mathf.Cos(rad));
+            var normal = new Vector3(0, Mathf.Cos(rad), -Mathf.Sin(rad));
+            Vector3 start = new Vector3(0, 0, 1.6f);
+            Box(start + dir * (length / 2) - normal * (thick / 2), new Vector3(6.4f, thick, length), Quaternion.Euler(-angle, 0, 0));
+
+            SpawnOnFloor();
+            Run(1500, forward: 127);
+            if (walkable)
+                Assert.Greater(Pos.y, StandOriginY + 2.5f, "should have walked up the ramp");
+            else
+                Assert.Less(Pos.y, StandOriginY + 1.5f, "should not get far up a too-steep ramp");
+        }
+
+        // ------------------------------------------------------------------ falling
+
+        [TestCase(5f, PmEventType.FallShort, 0)]
+        [TestCase(7f, PmEventType.FallDamage, 10)]
+        [TestCase(8.5f, PmEventType.FallDamage, 15)]
+        [TestCase(10f, PmEventType.FallDamage, 25)]
+        [TestCase(11.5f, PmEventType.FallDamage, 50)]
+        [TestCase(13f, PmEventType.FallDamage, 500)]
+        public void FallDamage_MatchesEtThresholds(float drop, PmEventType expected, int damage)
+        {
+            Spawn(new Vector3(0, StandOriginY + drop, 0));
+            Run(3000);
+            Assert.IsTrue(st.onGround);
+            PmEvent[] landings = events.Where(e => e.type == PmEventType.FallShort || e.type == PmEventType.FallDamage).ToArray();
+            Assert.AreEqual(1, landings.Length, $"events: {string.Join(", ", events)}");
+            Assert.AreEqual(expected, landings[0].type);
+            Assert.AreEqual(damage, landings[0].param);
+        }
+
+        [Test]
+        public void Landing_OnHugeFloor_DoesNotBounceOrDrift()
+        {
+            // PhysX sweep normals against very large boxes are tilted; this once caused a
+            // small sideways shove and a hop on every landing.
+            Box(new Vector3(0, 4.6f, 0), new Vector3(200f, 0.8f, 200f)); // top at y = 5
+            Spawn(new Vector3(0, 5f + StandOriginY + 0.05f, 0));
+            float maxUp = 0f;
+            for (int i = 0; i < 100; i++)
+            {
+                Run(Tick);
+                if (st.onGround)
+                    maxUp = Mathf.Max(maxUp, st.velocity.y);
+            }
+            Assert.IsTrue(st.onGround);
+            Assert.AreEqual(0f, Pos.x, 1e-4f);
+            Assert.AreEqual(0f, Pos.z, 1e-4f);
+            Assert.Less(maxUp, 0.01f);
+        }
+
+        [Test]
+        public void FallDamage_CanBeDisabled()
+        {
+            cfg.enableFallDamage = false;
+            Spawn(new Vector3(0, StandOriginY + 13f, 0));
+            Run(3000);
+            Assert.IsFalse(events.Any(e => e.type == PmEventType.FallDamage));
+            Assert.IsTrue(events.Any(e => e.type == PmEventType.FallShort));
+        }
+
+        // ------------------------------------------------------------------ stances
+
+        [Test]
+        public void CrouchTunnel_BlocksStanding_AllowsCrouching()
+        {
+            BuildTunnel(1.4f);
+            SpawnOnFloor();
+            Run(2000, forward: 127);
+            Assert.Less(Pos.z, 3.6f, "standing player should be blocked");
+
+            SpawnOnFloor();
+            Run(7000, forward: 127, up: -127);
+            Assert.Greater(Pos.z, 10f, "crouched player should get through");
+        }
+
+        [Test]
+        public void ProneTunnel_BlocksCrouching_AllowsProne()
+        {
+            BuildTunnel(1.1f);
+            SpawnOnFloor();
+            Run(2000, forward: 127, up: -127);
+            Assert.Less(Pos.z, 3.6f, "crouched player should be blocked");
+
+            SpawnOnFloor();
+            Run(Tick, buttons: CmdButtons.Prone);
+            Assert.IsTrue(st.IsProne);
+            Run(9000, forward: 127);
+            Assert.Greater(Pos.z, 10f, "prone player should get through");
+        }
+
+        [Test]
+        public void CantStandUp_UnderLowCeiling()
+        {
+            BuildTunnel(1.4f);
+            SpawnOnFloor(z: 7.5f);
+            st.pmFlags |= PmFlags.Ducked; // spawn crouched, the roof is too low to stand
+            Run(500, up: -127);
+            Assert.IsTrue(st.IsDucked);
+            Run(500);
+            Assert.IsTrue(st.IsDucked, "should stay crouched under the roof");
+        }
+
+        [Test]
+        public void Prone_DoubleTapForwardWhileCrouched_AndDelayBeforeStanding()
+        {
+            SpawnOnFloor();
+            Run(200, up: -127);
+            Run(Tick, up: -127, doubleTap: DoubleTap.Forward);
+            Assert.IsTrue(st.IsProne);
+
+            // Too soon to get up.
+            Run(Tick, up: 127);
+            Assert.IsTrue(st.IsProne);
+
+            Run(800);
+            Run(Tick, up: 127);
+            Assert.IsFalse(st.IsProne);
+        }
+
+        void BuildTunnel(float innerHeight)
+        {
+            const float length = 13f, inner = 2.4f, wall = 0.8f, total = 3.2f;
+            float zc = 3.8f + length / 2;
+            Box(new Vector3(-inner / 2 - wall / 2, total / 2, zc), new Vector3(wall, total, length));
+            Box(new Vector3(inner / 2 + wall / 2, total / 2, zc), new Vector3(wall, total, length));
+            Box(new Vector3(0, (innerHeight + total) / 2, zc), new Vector3(inner, total - innerHeight, length));
+        }
+
+        // ------------------------------------------------------------------ lean
+
+        [Test]
+        public void Lean_ReachesMax_AndIsBlockedByWalls()
+        {
+            SpawnOnFloor();
+            Run(400, buttons: CmdButtons.LeanLeft);
+            Assert.AreEqual(-cfg.leanMax, st.leanf, 1e-4f);
+
+            Run(400);
+            Assert.AreEqual(0f, st.leanf, 1e-4f);
+
+            Box(new Vector3(0.7112f, 1.6f, 0), new Vector3(0.4064f, 3.2f, 6.4f)); // wall 5 cm from the hull, on the right
+            Run(400, buttons: CmdButtons.LeanRight);
+            Assert.Greater(st.leanf, 0.127f);
+            Assert.Less(st.leanf, 0.356f);
+        }
+
+        [Test]
+        public void Lean_NotWhileMovingForward()
+        {
+            SpawnOnFloor();
+            Run(400, forward: 127, buttons: CmdButtons.LeanLeft);
+            Assert.AreEqual(0f, st.leanf, 1e-4f);
+        }
+
+        // ------------------------------------------------------------------ ladders and water
+
+        [Test]
+        public void Ladder_ClimbsWhenPushingForward()
+        {
+            Box(new Vector3(0, 6.4f, 3.2f), new Vector3(6.4f, 12.8f, 1.6f));
+            var ladder = Box(new Vector3(0, 6.4f, 2.3f), new Vector3(1.6f, 12.8f, 0.2f));
+            ladder.AddComponent<PmSurface>().flags = SurfaceFlags.Ladder;
+
+            SpawnOnFloor();
+            Run(2000, forward: 127);
+            Assert.Greater(Pos.y, 5f);
+            Assert.IsTrue(st.IsOnLadder);
+        }
+
+        [Test]
+        public void Water_SwimsAndSinks()
+        {
+            var water = Box(new Vector3(0, 6.4f, 0), new Vector3(26f, 12.8f, 26f));
+            water.GetComponent<BoxCollider>().isTrigger = true;
+            water.AddComponent<LiquidVolume>();
+            Physics.SyncTransforms();
+
+            Spawn(new Vector3(0, 5f, 0));
+            Run(100);
+            Assert.AreEqual(3, st.waterLevel);
+
+            float y = Pos.y;
+            Run(1000);
+            Assert.Less(Pos.y, y, "should sink slowly with no input");
+
+            Run(2000, forward: 127);
+            Assert.LessOrEqual(HorizontalSpeed, 8.128f * cfg.waterSwimScale + SpeedTolerance);
+            Assert.Greater(HorizontalSpeed, 2.5f);
+        }
+
+        // ------------------------------------------------------------------ presets
+
+        [Test]
+        public void EtExactPreset_MatchesDefaults()
+        {
+            var config = new MoveConfig();
+            MovePresets.Apply(config, MovePreset.Rounded);
+            Assert.AreNotEqual(JsonUtility.ToJson(new MoveConfig()), JsonUtility.ToJson(config));
+            MovePresets.Apply(config, MovePreset.EtExact);
+            Assert.AreEqual(JsonUtility.ToJson(new MoveConfig()), JsonUtility.ToJson(config));
+        }
+
+        [Test]
+        public void RoundedPreset_SpeedsAndJump()
+        {
+            MovePresets.Apply(cfg, MovePreset.Rounded);
+            Spawn(new Vector3(0, 0.6f, 0));
+            Run(1500, forward: 127);
+            Assert.AreEqual(6.4f, HorizontalSpeed, SpeedTolerance);
+            Run(1000, forward: 127, buttons: CmdButtons.Sprint);
+            Assert.AreEqual(8.8f, HorizontalSpeed, SpeedTolerance);
+
+            Run(1000);
+            float start = Pos.y, apex = start;
+            Run(Tick, up: 127);
+            for (int i = 0; i < 100; i++)
+            {
+                Run(Tick);
+                apex = Mathf.Max(apex, Pos.y);
+            }
+            Assert.AreEqual(6.8f * 6.8f / 40f, apex - start, 0.02f);
+        }
+
+        [TestCase(0.45f, true)]
+        [TestCase(0.5f, false)]
+        public void RoundedPreset_StepSize(float riser, bool climbable)
+        {
+            MovePresets.Apply(cfg, MovePreset.Rounded);
+            Box(new Vector3(0, riser / 2, 2.5f + 6.5f), new Vector3(3.2f, riser, 13f));
+            Spawn(new Vector3(0, 0.6f, 0));
+            Run(1500, forward: 127);
+            Assert.AreEqual(climbable ? 0.6f + riser : 0.6f, Pos.y, 0.03f);
+        }
+
+        [TestCase(5.9f, PmEventType.FallShort, 0)]
+        [TestCase(6.2f, PmEventType.FallDamage, 10)]
+        [TestCase(12.2f, PmEventType.FallDamage, 500)]
+        public void RoundedPreset_FallDamage(float drop, PmEventType expected, int damage)
+        {
+            MovePresets.Apply(cfg, MovePreset.Rounded);
+            Spawn(new Vector3(0, 0.6f + drop, 0));
+            Run(3000);
+            PmEvent landing = events.Single(e => e.type == PmEventType.FallShort || e.type == PmEventType.FallDamage);
+            Assert.AreEqual(expected, landing.type);
+            Assert.AreEqual(damage, landing.param);
+        }
+
+        // ------------------------------------------------------------------ determinism
+
+        [Test]
+        public void SameCommands_GiveIdenticalResults()
+        {
+            Box(new Vector3(0, 0.2f, 7.5f), new Vector3(6.4f, 0.4f, 1.6f));
+
+            PlayerState RunScript()
+            {
+                time = 1000;
+                SpawnOnFloor();
+                Run(500, forward: 127, buttons: CmdButtons.Sprint);
+                Run(Tick, forward: 127, up: 127);
+                Run(800, forward: 127, right: 127);
+                Run(600, forward: -127, up: -127);
+                return st;
+            }
+
+            PlayerState a = RunScript();
+            PlayerState b = RunScript();
+            Assert.AreEqual(a.origin, b.origin);
+            Assert.AreEqual(a.velocity, b.velocity);
+            Assert.AreEqual(a.pmFlags, b.pmFlags);
+        }
+    }
+}
