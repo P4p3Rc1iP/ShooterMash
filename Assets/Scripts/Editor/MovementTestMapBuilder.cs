@@ -68,7 +68,8 @@ namespace ShooterMashup.EditorTools
             BuildStrafeLane(-38);
             BuildBuildingArea(new Vector3(56, 0, 8));
 
-            BuildPlayer(new Vector3(0, 0.65f, 0));
+            // Spawn in front of the building showcase, facing it (+z).
+            BuildPlayer(new Vector3(55, 0.65f, 12));
 
             AssetDatabase.SaveAssets();
             EditorSceneManager.SaveScene(scene, ScenePath);

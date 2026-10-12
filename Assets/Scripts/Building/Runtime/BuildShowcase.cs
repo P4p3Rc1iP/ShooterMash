@@ -166,6 +166,24 @@ namespace ShooterMashup.Building
                     Place("Beam 3 m", Wood, o + new Vector3(x, y, H), 90);
             }
 
+            // Bracing: a 45° diagonal across every storey of the back and sides (the front has the
+            // ladder), knee braces under the platform at the front either side of it, and 27° iron
+            // stays from the ground up to the side legs.
+            for (int level = 0; level < levels; level++)
+            {
+                float y = T * level;
+                Place("Diagonal beam 45° 3 m", Wood, o + new Vector3(0, y, H));         // left, rising to the back
+                Place("Diagonal beam 45° 3 m", Wood, o + new Vector3(T, y, H), 180);    // right, rising to the front
+                Place("Diagonal beam 45° 3 m", Wood, o + new Vector3(H, y, T), 90);     // back, rising to the right
+            }
+            Place("Diagonal beam 45° 1 m", Wood, o + new Vector3(0.5f, top - 1.1f, 0), 90);
+            Place("Diagonal beam 45° 1 m", Wood, o + new Vector3(T - 0.5f, top - 1.1f, 0), -90);
+            foreach (float z in new[] { 0f, T })
+            {
+                Place("Diagonal beam 27° 3 m", Iron, o + new Vector3(-T, 0, z), 90);      // from 6 m out on the left
+                Place("Diagonal beam 27° 3 m", Iron, o + new Vector3(2 * T, 0, z), -90);  // and on the right
+            }
+
             // Platform with a railing; the front has a gap where the ladder arrives.
             Place("Floor 3x3", Wood, o + new Vector3(H, top - 0.2f, H));
             for (int k = 0; k < 3; k++)

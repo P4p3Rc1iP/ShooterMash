@@ -411,12 +411,46 @@ namespace ShooterMashup.Building.Tests
         public void ForcedSnapPoint_OnABeam()
         {
             Place(Pillar3, BuildMaterial.Wood, Vector3.zero);
-            // Force the beam's right end onto the post top.
-            int held = Held(Beam3, new Vector3(H, 0.2f, 0));
+            // Force the beam's right end onto the post top: beams snap by their centre line, so the
+            // beam sits centred on the top of the post.
+            int held = Held(Beam3, new Vector3(H, 0.1f, 0));
             SnapResult s = Snap(Beam3, new Vector3(0.05f, PostTop, 0), Vector3.up, held: held);
             Assert.IsTrue(s.snapped);
             Assert.AreEqual(held, s.heldIndex);
-            AssertNear(new Vector3(-H, BeamY, 0), s.position);
+            AssertNear(new Vector3(-H, PostTop - 0.1f, 0), s.position);
+        }
+
+        [TestCase("Diagonal beam 45° 3 m", 3f, 3f)]
+        [TestCase("Diagonal beam 45° 1 m", 1f, 1f)]
+        [TestCase("Diagonal beam 27° 3 m", 6f, 3f)]
+        [TestCase("Diagonal beam 27° 1 m", 2f, 1f)]
+        public void DiagonalBeams_SnapAtTheEndsOfTheirCentreLine(string name, float run, float rise)
+        {
+            PieceDef beam = PieceCatalog.All[Type(name)];
+            Obb box = beam.boxes[0];
+            CollectionAssert.AreEquivalent(new[] { BuildMaterial.Wood, BuildMaterial.Iron }, beam.Materials);
+            Assert.AreEqual(2, beam.snapPoints.Length);
+            AssertNear(new Vector3(0, 0, -run / 2), beam.snapPoints[0]);
+            AssertNear(new Vector3(0, rise, run / 2), beam.snapPoints[1]);
+            // Both ends are on the box's axis, at its two end faces.
+            foreach (Vector3 p in beam.snapPoints)
+            {
+                Vector3 local = Quaternion.Inverse(box.rotation) * (p - box.center);
+                AssertNear(new Vector3(0, 0, Mathf.Sign(local.z) * box.halfExtents.z), local);
+            }
+        }
+
+        [Test]
+        public void DiagonalBrace_SnapsOntoAPostTopAndHoldsUp()
+        {
+            // A 45° 3 m diagonal from the foot of one post to the top of another 3 m away.
+            Place(Pillar3, BuildMaterial.Wood, Vector3.zero);
+            Place(Pillar3, BuildMaterial.Wood, new Vector3(0, 0, G));
+            int diag = Type("Diagonal beam 45° 3 m");
+            SnapResult s = Snap(diag, new Vector3(0.05f, PostTop - 0.05f, G), Vector3.up, held: 1); // high end onto the far post top
+            Assert.IsTrue(s.snapped);
+            AssertNear(new Vector3(0, 0, H), s.position);
+            Assert.IsTrue(TryPlace(diag, BuildMaterial.Wood, s.position).Ok);
         }
 
         [Test]

@@ -91,6 +91,10 @@ namespace ShooterMashup.Building
             foreach (float s in Sizes) all.Add(Wall($"Wall {N(s)}x{N(s)}", s, s).In(wood));
             foreach (float s in Sizes) all.Add(Pillar($"Pillar {N(s)} m", s).In(wood, stone, iron));
             foreach (float s in Sizes) all.Add(HorizontalBeam($"Beam {N(s)} m", s).In(wood, iron));
+            // Diagonal beams for bracing, named by how high they rise: 45° (rise over the same run)
+            // and 27° (rise over twice the run, like the stairs).
+            foreach (float s in Sizes) all.Add(DiagonalBeam($"Diagonal beam 45° {N(s)} m", s, s).In(wood, iron));
+            foreach (float s in Sizes) all.Add(DiagonalBeam($"Diagonal beam 27° {N(s)} m", 2f * s, s).In(wood, iron));
             foreach (float s in Sizes) all.Add(Roof45($"Roof 45° {N(s)}x{N(s)}", s).In(wood));
             foreach (float s in Sizes) all.Add(Ladder($"Ladder {N(s)} m", s).In(wood).WithSurface(SurfaceFlags.Ladder));
             // 27° stairs, twice as long as they rise (1 m up in 2 m, 3 m up in 6 m), in each width.
@@ -128,11 +132,26 @@ namespace ShooterMashup.Building
             new PieceDef(name, new[] { new Obb(new Vector3(0, height / 2, 0), new Vector3(Post, height, Post)) },
                 Line(Vector3.zero, new Vector3(0, height, 0)));
 
+        /// <summary>A beam along x; its snap points run along its centre line.</summary>
         static PieceDef HorizontalBeam(string name, float length)
         {
             float l = length / 2f;
             return new PieceDef(name, new[] { new Obb(new Vector3(0, Beam / 2, 0), new Vector3(length, Beam, Beam)) },
-                Line(new Vector3(-l, Beam, 0), new Vector3(l, Beam, 0)));
+                Line(new Vector3(-l, Beam / 2, 0), new Vector3(l, Beam / 2, 0)));
+        }
+
+        /// <summary>
+        /// A beam rising `rise` over a horizontal `run` along z, from its low end at -z to its high
+        /// end at +z. Like the roof, it snaps at both ends, which sit on its centre line; the pivot
+        /// is under its middle at the height of the low end.
+        /// </summary>
+        static PieceDef DiagonalBeam(string name, float run, float rise)
+        {
+            float r = run / 2f;
+            Vector3 low = new Vector3(0, 0, -r), high = new Vector3(0, rise, r);
+            Quaternion tilt = Quaternion.LookRotation(high - low);
+            var box = new Obb((low + high) / 2f, new Vector3(Beam, Beam, (high - low).magnitude), tilt);
+            return new PieceDef(name, new[] { box }, new[] { low, high });
         }
 
         static PieceDef Roof45(string name, float size)
@@ -151,22 +170,21 @@ namespace ShooterMashup.Building
         }
 
         /// <summary>
-        /// A 1 m wide ladder: a backing board with rails and rungs in front (+z). Its snap points sit
-        /// 0.1 m behind the board, on the line of the wall, beam or post it leans on, so snapped to
-        /// one it stands against its face. Climbable through SurfaceFlags.Ladder.
+        /// A 1 m wide ladder: two rails and rungs, open so you can see through it. It stands in front
+        /// (+z) of its snap points, which sit 0.1 m behind it on the line of the wall, beam or post it
+        /// leans on, so snapped to one it stands against its face. Climbable through SurfaceFlags.Ladder.
         /// </summary>
         static PieceDef Ladder(string name, float height)
         {
-            const float width = 1f, board = 0.04f, rail = 0.08f, depth = 0.1f, behind = 0.1f;
+            const float width = 1f, rail = 0.08f, depth = 0.1f, behind = 0.1f;
             const float rungSpacing = 0.3f;
             var boxes = new List<Obb>
             {
-                new Obb(new Vector3(0, height / 2, board / 2), new Vector3(width, height, board)),
-                new Obb(new Vector3(-(width - rail) / 2, height / 2, board + depth / 2), new Vector3(rail, height, depth)),
-                new Obb(new Vector3((width - rail) / 2, height / 2, board + depth / 2), new Vector3(rail, height, depth)),
+                new Obb(new Vector3(-(width - rail) / 2, height / 2, depth / 2), new Vector3(rail, height, depth)),
+                new Obb(new Vector3((width - rail) / 2, height / 2, depth / 2), new Vector3(rail, height, depth)),
             };
             for (float y = rungSpacing / 2; y < height; y += rungSpacing)
-                boxes.Add(new Obb(new Vector3(0, y, board + depth / 2), new Vector3(width - 2 * rail, 0.04f, 0.04f)));
+                boxes.Add(new Obb(new Vector3(0, y, depth / 2), new Vector3(width - 2 * rail, 0.04f, 0.04f)));
             Vector3[] snaps = Rectangle(new Vector3(-width / 2, 0, -behind), Vector3.right * width, Vector3.up * height);
             return new PieceDef(name, boxes.ToArray(), snaps);
         }

@@ -8,7 +8,8 @@ namespace ShooterMashup.Player
         EtExact,
         /// <summary>
         /// Our own values: ET rounded to friendly metric numbers (1-2% different), plus changes for
-        /// building: a lower prone hull that fits under a floor on 1 m pillars, and 50 cm steps.
+        /// building: a narrower hull (0.7 m, fits between pillars 1 m apart), a lower prone hull that
+        /// fits under a floor on 1 m pillars, and 50 cm steps.
         /// Stamina is more forgiving than ET's.
         /// </summary>
         ShooterMash,
@@ -69,8 +70,8 @@ namespace ShooterMashup.Player
 
         static void ApplyShooterMash(MoveConfig c)
         {
-            c.mins = new Vector3(-0.45f, -0.6f, -0.45f);
-            c.maxs = new Vector3(0.45f, 1.2f, 0.45f);                // 1.8 m tall
+            c.mins = new Vector3(-0.35f, -0.6f, -0.35f);     // 0.7 m wide: fits between pillars 1 m apart (0.75 m gap)
+            c.maxs = new Vector3(0.35f, 1.2f, 0.35f);      // 1.8 m tall
             c.standViewHeight = 1.0f;                                // eyes at 1.6 m
             c.crouchViewHeight = 0.4f;                               // crouched 1.2 m tall
             c.proneViewHeight = -0.2f;                               // prone eyes at 0.4 m

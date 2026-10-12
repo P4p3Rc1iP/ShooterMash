@@ -48,7 +48,8 @@ Runtime/      Unity glue for a local player
   sprints 8.9 m/s and jumps 1.16 m. ET's tiny internal tolerances are written in the code
   as multiples of `Inch` so they can still be compared with the original source.
 - **Presets.** `PlayerMotor` has a preset dropdown (F4 in play mode). *ShooterMash* is the
-  default: ET rounded to metric (1.8 m tall, 6.4 m/s run, 20 m/s² gravity, fall damage from
+  default: ET rounded to metric (1.8 m tall and 0.7 m wide, so it fits between pillars 1 m apart;
+  6.4 m/s run, 20 m/s² gravity, fall damage from
   6 m...) plus changes for building: 0.52 m steps (so 50 cm steps can be run up) and a 0.6 m
   prone hull that fits under a floor on 1 m pillars. Stamina is more forgiving: a full bar
   lasts 10 s of sprint (ET: 4 s) and refills twice as fast. *ET exact* is the original, for comparison.

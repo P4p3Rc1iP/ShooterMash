@@ -5,7 +5,7 @@ that support goes. Structures only for now; vehicles come later.
 
 ## Try it
 
-Rebuild the test map (`ShooterMashup > Build Movement Test Map`) and walk east to the
+Rebuild the test map (`ShooterMashup > Build Movement Test Map`); you spawn in front of the
 building area (around x = 56). Press **B** to take out the build tool. A house, a
 pavilion and a lookout tower are built there from real pieces when play starts (`BuildShowcase`).
 
@@ -25,9 +25,11 @@ floor).
 | Shift (hold) | free placement, no snapping (also sprint) |
 | Ctrl+Z / Ctrl+Y | undo / redo your own recent actions (Ctrl also crouches; harmless) |
 
-Pieces come in set materials: wood has every shape, including 1 m wide ladders (1 and 3 m tall,
+Pieces come in set materials: wood has every shape, including diagonal beams (45° and 27°, rising
+1 or 3 m, snapping at the ends of their centre line) and see-through 1 m wide ladders (1 and 3 m tall,
 climbable, snapping 0.1 m out from what they lean on); stone has slabs (0.5 m thick floors),
-pillars and stairs; iron has pillars and beams. Each material has a placeholder texture and colour: wood planks, stone bricks, riveted iron
+pillars and stairs; iron has pillars and (diagonal) beams. Horizontal beams snap by their centre
+line. Each material has a placeholder texture and colour: wood planks, stone bricks, riveted iron
 plates (`StructureManager > Material Colors`). While the tool is out, the colour shows support
 instead (blue grounded, then green, yellow, red as support runs out) and the pattern still shows
 the material. Lean is off while the tool is out (Q/E are used for snapping).

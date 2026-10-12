@@ -113,6 +113,30 @@ namespace ShooterMashup.Building.Tests
             Assert.Greater(st.origin.y - Base.y + cfg.mins.y, 5f, "and climb it");
         }
 
+        [TestCase(MovePreset.ShooterMash, true)]
+        [TestCase(MovePreset.EtExact, false)]
+        public void Player_SqueezesBetweenPillarsAMetreApart(MovePreset preset, bool fits)
+        {
+            // Two 3 m pillars on the 1 m grid leave a 0.75 m gap: the ShooterMash player (0.7 m wide)
+            // fits through, ET's (0.91 m) doesn't.
+            PieceDef pillar = System.Array.Find(PieceCatalog.All, d => d.name == "Pillar 3 m");
+            Box(new Vector3(0, -0.4f, 0), new Vector3(50, 0.8f, 50));
+            foreach (float x in new[] { -0.5f, 0.5f })
+                Box(new Vector3(x, 0, 3f) + pillar.boxes[0].center, pillar.boxes[0].Size);
+            Physics.SyncTransforms();
+
+            var cfg = new MoveConfig();
+            MovePresets.Apply(cfg, preset);
+            var pmove = new PlayerMove(cfg, new UnityPmoveWorld(Physics.DefaultRaycastLayers));
+            PlayerState st = PlayerState.Spawn(Base + new Vector3(0, -cfg.mins.y, 0), cfg, 1000);
+            for (int t = 1000; t < 1000 + 1500; t += Tick)
+                pmove.Move(ref st, new PlayerCmd { serverTime = t + Tick, forwardMove = 127 });
+            if (fits)
+                Assert.Greater(st.origin.z - Base.z, 5f, "should get through");
+            else
+                Assert.Less(st.origin.z - Base.z, 3f, "should be stopped");
+        }
+
         [Test]
         public void OneStoreyRoom_HasRoomToStand()
         {
