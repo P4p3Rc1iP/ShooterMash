@@ -31,8 +31,6 @@ namespace ShooterMashup.Building
         [Range(0f, 1f)] public float autoOverlapLimit = BuildSnapping.DefaultOverlapLimit;
         [Tooltip("The same, when you picked the snap point yourself with Q/E. Only near-duplicates are refused.")]
         [Range(0f, 1f)] public float manualOverlapLimit = 0.95f;
-        [Tooltip("Snapping puts the piece on the face you aim at (top of a slab: on top; side: beside). Toggle with T in play mode.")]
-        public bool preferAimedFace = true;
         [Tooltip("Found automatically if left empty.")]
         public StructureManager structures;
 
@@ -49,7 +47,6 @@ namespace ShooterMashup.Building
 
         bool menuOpen;
         int selected;
-        int kit; // index into PieceCatalog.Kits
         BuildMaterial material;
         float yaw;
         int rotationMode = 2; // index into rotationSteps; rotationSteps.Length means free
@@ -57,7 +54,7 @@ namespace ShooterMashup.Building
         float snapKeyDownTime;
         bool snapResetDone = true;
         bool rightClickCopied;
-        readonly Dictionary<(int kit, BuildMaterial material), int> lastPiece = new Dictionary<(int, BuildMaterial), int>();
+        readonly Dictionary<BuildMaterial, int> lastPiece = new Dictionary<BuildMaterial, int>();
         PieceThumbnails thumbnails;
 
         GameObject ghost;
@@ -115,20 +112,8 @@ namespace ShooterMashup.Building
             if (kb == null || mouse == null || structures == null)
                 return;
 
-            // 2 and 3 take out the tool with the 2.5 m or the 3 m kit; the same key again puts it away.
-            int pressedKit = kb.digit2Key.wasPressedThisFrame ? 0 : kb.digit3Key.wasPressedThisFrame ? 1 : -1;
-            if (pressedKit >= 0 && !menuOpen)
-            {
-                if (Equipped && kit == pressedKit)
-                {
-                    SetEquipped(false);
-                }
-                else
-                {
-                    SwitchKit(pressedKit);
-                    SetEquipped(true);
-                }
-            }
+            if (kb.bKey.wasPressedThisFrame && !menuOpen)
+                SetEquipped(!Equipped);
             if (!Equipped)
                 return;
 
@@ -140,7 +125,7 @@ namespace ShooterMashup.Building
                 if (kb.escapeKey.wasPressedThisFrame || mouse.middleButton.wasPressedThisFrame)
                     CloseMenu();
                 else
-                    thumbnails.Prepare(kit, material); // the material can change in the menu
+                    thumbnails.Prepare(material); // the material can change in the menu
                 return;
             }
             bool locked = LocalPlayerInput.CursorLocked;
@@ -202,12 +187,6 @@ namespace ShooterMashup.Building
             if (scroll != 0f)
                 yaw = Mathf.Repeat(yaw + Mathf.Sign(scroll) * RotationStep, 360f);
 
-            if (kb.tKey.wasPressedThisFrame)
-            {
-                preferAimedFace = !preferAimedFace;
-                Say(preferAimedFace ? "snapping: onto the face you aim at" : "snapping: best fit only");
-            }
-
             if (kb.rKey.wasPressedThisFrame)
             {
                 rotationMode = (rotationMode + 1) % (rotationSteps.Length + 1);
@@ -268,7 +247,7 @@ namespace ShooterMashup.Building
             menuOpen = true;
             input.uiOpen = true;
             HideGhost();
-            thumbnails.Prepare(kit, material);
+            thumbnails.Prepare(material);
             LocalPlayerInput.SetCursorLocked(false);
         }
 
@@ -301,7 +280,6 @@ namespace ShooterMashup.Building
                 heldSnap = -1;
             selected = p.record.type;
             material = p.record.material;
-            kit = p.def.Kit;
             yaw = Mathf.Repeat(Mathf.Round(p.record.rotation.eulerAngles.y * 100f) / 100f, 360f);
             Say($"copied {MaterialNames[(int)material]} {Selected.name}, rotation {yaw:0.#}°");
         }
@@ -341,7 +319,7 @@ namespace ShooterMashup.Building
             if (!free)
             {
                 snap = BuildSnapping.Snap(Sim, def, aim.point, aim.normal, userRotation, heldSnap, snapRadius,
-                    heldSnap >= 0 ? manualOverlapLimit : autoOverlapLimit, preferAimedFace);
+                    heldSnap >= 0 ? manualOverlapLimit : autoOverlapLimit);
                 if (snap.snapped)
                 {
                     placePosition = snap.position;
@@ -543,13 +521,12 @@ namespace ShooterMashup.Building
             }
 
             string text =
-                $"<b>{MaterialNames[(int)material]} {def.name}</b>  <color=#aaa>({PieceCatalog.Kits[kit].name} kit)</color>   snap point {snapText}   " +
-                $"rotation {yaw:0.#}° ({(RotationSnapped ? $"{RotationStep}° steps" : "free")})   " +
-                $"snap {(preferAimedFace ? "onto aimed face" : "best fit")}\n" +
+                $"<b>{MaterialNames[(int)material]} {def.name}</b>   snap point {snapText}   " +
+                $"rotation {yaw:0.#}° ({(RotationSnapped ? $"{RotationStep}° steps" : "free")})\n" +
                 status + "\n" +
                 (Time.time - messageTime < 2.5f ? $"<color=#ffd966>{message}</color>" : "") + "\n" +
-                "<color=#aaa>LMB place, hold RMB remove/dig, MMB menu, scroll rotate, R rotation steps, Q/E snap point (hold: auto), T snap style,\n" +
-                "Shift free placement, Shift+RMB copy the piece you aim at, Ctrl+Z undo, Ctrl+Y redo, 2 / 3 kit (again: put away)</color>";
+                "<color=#aaa>LMB place, hold RMB remove/dig, MMB menu, scroll rotate, R rotation steps, Q/E snap point (hold: auto),\n" +
+                "Shift free placement, Shift+RMB copy the piece you aim at, Ctrl+Z undo, Ctrl+Y redo, B put away</color>";
             GUI.Label(new Rect(0, Screen.height - 250, Screen.width, 120), text, style);
         }
 
@@ -560,20 +537,20 @@ namespace ShooterMashup.Building
             // Sized for the material with the most pieces, so switching tabs doesn't resize it.
             int most = 0;
             foreach (BuildMaterial m in System.Enum.GetValues(typeof(BuildMaterial)))
-                most = Mathf.Max(most, PieceCatalog.Pieces(kit, m).Count);
+                most = Mathf.Max(most, PieceCatalog.Pieces(m).Count);
             int rows = (most + columns - 1) / columns;
             float width = columns * (tile + 4f) + 32f, height = rows * (tileHeight + 4f) + 130f;
             var area = new Rect((Screen.width - width) / 2f, (Screen.height - height) / 2f, width, height);
             GUI.Box(area, "");
             GUILayout.BeginArea(new Rect(area.x + 16, area.y + 12, width - 32, height - 24));
-            GUILayout.Label($"<b>Build</b>  ({PieceCatalog.Kits[kit].name} kit, keys 2 / 3)", bigStyle);
+            GUILayout.Label("<b>Build</b>", bigStyle);
             GUILayout.Space(6);
             var picked = (BuildMaterial)GUILayout.Toolbar((int)material, MaterialNames, buttonStyle, GUILayout.Height(32));
             if (picked != material)
                 SwitchMaterial(picked);
             GUILayout.Space(10);
 
-            List<int> pieces = PieceCatalog.Pieces(kit, material);
+            List<int> pieces = PieceCatalog.Pieces(material);
             for (int i = 0; i < pieces.Count; i += columns)
             {
                 GUILayout.BeginHorizontal();
@@ -595,28 +572,11 @@ namespace ShooterMashup.Building
         /// <summary>Change material, keeping the piece if it comes in it, else the last one used in that material.</summary>
         void SwitchMaterial(BuildMaterial m)
         {
-            lastPiece[(kit, material)] = selected;
+            lastPiece[material] = selected;
             material = m;
-            SelectFor(kit, m);
-        }
-
-        /// <summary>Change kit, going back to the piece last used in it (in this material).</summary>
-        void SwitchKit(int k)
-        {
-            if (k == kit)
+            if (PieceCatalog.Allows(selected, m))
                 return;
-            lastPiece[(kit, material)] = selected;
-            kit = k;
-            SelectFor(k, material);
-            Say($"{PieceCatalog.Kits[k].name} kit");
-        }
-
-        void SelectFor(int k, BuildMaterial m)
-        {
-            PieceDef current = PieceCatalog.Get(selected);
-            if (current != null && current.Kit == k && current.ComesIn(m))
-                return;
-            int type = lastPiece.TryGetValue((k, m), out int last) && PieceCatalog.Allows(last, m) ? last : PieceCatalog.Pieces(k, m)[0];
+            int type = lastPiece.TryGetValue(m, out int last) && PieceCatalog.Allows(last, m) ? last : PieceCatalog.Pieces(m)[0];
             if (type != selected)
                 heldSnap = -1;
             selected = type;

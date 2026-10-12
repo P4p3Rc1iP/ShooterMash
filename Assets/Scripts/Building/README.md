@@ -6,29 +6,28 @@ that support goes. Structures only for now; vehicles come later.
 ## Try it
 
 Rebuild the test map (`ShooterMashup > Build Movement Test Map`) and walk east to the
-building area (around x = 56). Press **2** or **3** to take out the build tool.
+building area (around x = 56). Press **B** to take out the build tool. A house, a
+pavilion and a lookout tower are built there from real pieces when play starts (`BuildShowcase`).
 
-There are two piece kits, to compare grid sizes (`PieceCatalog.Kits`):
-- **2.5 m kit (key 2):** a 0.5 m grid; every shape in 2.5, 1 and 0.5 m; storeys of 2.5 m.
-- **3 m kit (key 3):** a 1 m grid; every shape in 3 and 1 m; storeys of 3 m (2.8 m headroom).
-  No stone block yet (it's 0.5 m wide).
+Pieces are on a 1 m grid: every shape in 3 m and 1 m, storeys of 3 m (2.8 m headroom under a
+floor).
 
 | Input | Action |
 | --- | --- |
-| 2 / 3 | take out the build tool with the 2.5 m kit (0.5 m grid) or the 3 m kit (1 m grid); the same key again puts it away |
+| B | take out / put away the build tool |
 | Middle mouse | build menu (material and piece, with pictures) |
 | Shift + right mouse | copy the piece you aim at: its shape, material and rotation |
 | Left mouse | place |
 | Right mouse (hold) | show what would collapse; release to remove the piece, or dig a dirt block |
 | Scroll | rotate |
 | R | rotation steps: 90° → 45° → 22.5° (default) → 15° → free (5° per notch) |
-| T | snap style: onto the face you aim at (default; slab top = stack, side or ground = beside) or best fit only |
 | Q / E | choose which snap point of the held piece attaches where you aim (yellow marker); "auto" picks the best fit; hold Q or E to go back to auto. A chosen point may overlap other pieces (only near-duplicates are refused) |
 | Shift (hold) | free placement, no snapping (also sprint) |
 | Ctrl+Z / Ctrl+Y | undo / redo your own recent actions (Ctrl also crouches; harmless) |
 
-Pieces come in set materials: wood has every shape; stone has slabs (0.5 m thick floors), a
-1x0.5x0.5 m block, pillars and stairs; iron has pillars and beams. Each material has a placeholder texture and colour: wood planks, stone bricks, riveted iron
+Pieces come in set materials: wood has every shape, including 1 m wide ladders (1 and 3 m tall,
+climbable, snapping 0.1 m out from what they lean on); stone has slabs (0.5 m thick floors),
+pillars and stairs; iron has pillars and beams. Each material has a placeholder texture and colour: wood planks, stone bricks, riveted iron
 plates (`StructureManager > Material Colors`). While the tool is out, the colour shows support
 instead (blue grounded, then green, yellow, red as support runs out) and the pattern still shows
 the material. Lean is off while the tool is out (Q/E are used for snapping).
@@ -70,7 +69,7 @@ Runtime/
   material's horizontal and vertical loss by the direction of the connection, and `length` is the
   piece's size that way (its height when stacked, how far it reaches out when held from the
   side). Unlike Valheim it's per metre, not per piece, so small pieces reach as far as big ones.
-  A piece resting on another counts as stacked even when offset (running-bond blocks). Below the
+  A piece resting on another counts as stacked even when offset (e.g. staggered slabs). Below the
   minimum, a piece breaks.
 
   | Material | Max | Min | Vertical loss | Horizontal loss | Result |
@@ -90,16 +89,12 @@ Runtime/
 - **Snapping.** You aim at a snap point on a placed piece: the nearest one (within 1 m) is where
   the held piece attaches. With Q/E you pick which of the held piece's points goes there;
   otherwise it's chosen automatically: never sinking into an existing piece (more than 20% of
-  either's volume), then the best fit (most snap points lining up), then the side of the
-  surface you're looking at.
-  **Aimed-face rule** (default, toggle with T to compare): placements that sit on the face you
-  aim at come first, Minecraft style. Aiming at a stone slab's top stacks on it, its side face
-  or the ground beside it puts the new one beside. Where nothing can sit on that face (a floor
-  beside a floor, a beam on a post) it makes no difference. With the rule off, stone slabs and
-  blocks (which snap on both faces) only count top-to-top and bottom-to-bottom towards the fit,
-  so they go beside each other; to stack one, pick a bottom snap point with Q/E.
-  Pieces keep the rotation you gave them (world space) when they
-  snap; to match an angled piece, copy it with Shift + right click.
+  either's volume), then on the face you aim at (Minecraft style: a stone slab's top stacks on
+  it, its side face or the ground beside it goes beside), then the best fit (most snap points
+  lining up), then the side of the surface you're looking at. Where nothing can sit on the
+  aimed face (a floor beside a floor, a beam on a post), the fit decides. Pieces keep the
+  rotation you gave them (world space) when they snap; to match an angled piece, copy it with
+  Shift + right click.
 - **Undo.** Your own actions only, within 60 s, and only if nobody else (or the terrain) changed
   anything within a metre of it since. Undoing a removal restores everything that collapsed with
   it. Undoing a placement is refused if something built on it since would fall.

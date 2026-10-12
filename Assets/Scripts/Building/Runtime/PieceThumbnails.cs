@@ -29,9 +29,9 @@ namespace ShooterMashup.Building
             cache.TryGetValue((type, material), out RenderTexture rt) && rt != null && rt.IsCreated() ? rt : null;
 
         /// <summary>Render any missing pictures for this material. Call outside OnGUI.</summary>
-        public void Prepare(int kit, BuildMaterial material)
+        public void Prepare(BuildMaterial material)
         {
-            foreach (int type in PieceCatalog.Pieces(kit, material))
+            foreach (int type in PieceCatalog.Pieces(material))
                 if (Get(type, material) == null)
                     cache[(type, material)] = Render(type, material);
         }

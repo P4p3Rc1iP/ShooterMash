@@ -50,33 +50,31 @@ Key decisions so far:
 Code is in `Assets/Scripts/Building/`; read its `README.md` first. First prototype, Valheim-inspired.
 
 Agreed with the owner:
-- **Two piece kits are being compared (2026-10-12)**, switched with keys 2 and 3 (which also take
-  out / put away the build tool; B is no longer used). The owner found dividing by 5 tedious
-  and is trying a 1 m grid; 2.5 m can't be on it, hence 3 m.
-  - 2.5 m kit (key 2): universal 0.5 m grid; every piece (floor, wall, pillar, beam, 45° roof,
-    stairs) in 2.5, 1 and 0.5 m; storeys 2.5 m (2.3 m headroom for the 1.8 m player).
-  - 3 m kit (key 3): 1 m grid; every piece in 3 and 1 m (no 2 m for now); storeys 3 m. No
-    stone block (0.5 m wide). Stone slabs stay 0.5 m thick, so heights still go in 0.5 m.
-  - Snap points sit every grid step along edges, so structures never drift off their kit's
-    grid (a test checks this). Stairs are 27° and rise each size over twice that length (the
-    owner liked the 27° slope), in every width of the kit.
+- **1 m grid with 3 m pieces** (decided 2026-10-12 after comparing with a 2.5 m kit on a 0.5 m
+  grid, which was removed: dividing by 5 was tedious). Every piece (floor, wall, pillar, beam,
+  45° roof, stairs) in 3 m and 1 m (no 2 m for now); storeys 3 m (2.8 m headroom). Stone slabs
+  stay 0.5 m thick, so heights can go in 0.5 m. Snap points sit every metre along edges, so
+  structures never drift off the grid (a test checks this). Stairs are 27° and rise 1 or 3 m
+  over twice that length (the owner liked the 27° slope), 1 or 3 m wide. B takes out the tool.
 - Valheim-style pieces that snap, or place
-  freely with Shift. Q/E pick the snap point (and then allow overlaps; hold for auto). T toggles the
-  aimed-face rule (default on, being compared: the piece goes on the face you aim at, so a slab
-  top stacks and a side face or the ground goes beside). R cycles rotation steps
+  freely with Shift. Q/E pick the snap point (and then allow overlaps; hold for auto).
+  Aimed-face rule (decided, no toggle): the piece goes on the face you aim at, so a slab top
+  stacks and a side face or the ground goes beside. R cycles rotation steps
   (90, 45, 22.5, 15, free). Hold RMB to remove, MMB opens the menu. Rotation is always
   world space, also when snapping; Shift+RMB copies the aimed piece (shape, material,
   rotation). Placeholder texture and colour per material. Sizes may change once they've been
   tried in first person.
 - Valheim's support model per material (wood, stone, iron for now; Gorkamorka materials like
   scrap and plastic later). Integrity is solved exactly and in real time. A piece resting on
-  another (flat contact) counts as vertical support even when offset, e.g. running-bond blocks.
+  another (flat contact) counts as vertical support even when offset, e.g. staggered slabs.
   Losses are per metre (per 2.5 m, so 2.5 m pieces match Valheim's per-piece numbers), so small
   pieces reach as far as big ones (owner's choice). Stone's horizontal loss is 4 per 2.5 m so it
   still barely overhangs (~0.5 m), like Valheim's no-overhang stone.
 - Pieces come in set materials (enforced by `BuildSystem`): wood has every shape (prototyping);
-  stone has slabs (0.5 m thick floors that snap on both faces), a 1x0.5x0.5 m block, pillars
-  and stairs; iron has pillars and beams.
+  stone has slabs (0.5 m thick floors that snap on both faces), pillars and stairs; iron has
+  pillars and beams. Wood also has 1 m wide ladders (1 and 3 m tall; climbable through
+  `SurfaceFlags.Ladder`, which the piece view adds as a `PmSurface`). Roofs rest on their snap
+  edges by their underside.
 - Structures must rest on terrain or static world geometry. Digging out the ground under a
   structure collapses it. Pieces sit freely on voxel terrain (no voxel snapping), and voxel
   size is unrelated to piece size. The voxel world must report changed regions to
@@ -90,9 +88,9 @@ Agreed with the owner:
 
 ## To-do / open questions
 
-- **Open building topics (raised 2026-10-12):** stair width (2.5/1/0.5 m variants added
-  2026-10-12, still being tried out), ladders (as buildable pieces), and roofs (only plain 45°
-  slabs so far).
+- **Open building topics (raised 2026-10-12):** stair width (1 and 3 m wide stairs now, still
+  being tried out), ladders (wood ladder pieces added 2026-10-12, more to try), and roofs (only
+  plain 45° slabs so far).
 
 - Sprinting in big open terrain. Ideas raised but not built: soft sprint falloff as stamina runs
   low, open-world tuning (bigger bar, regen while walking), and a long-term fatigue layer that
@@ -116,6 +114,9 @@ Agreed with the owner:
   `ComputePenetration` at the touching position, and near-zero components are snapped to 0.
   Quake logic needs flat floors to have exactly vertical normals; otherwise every landing
   turns fall speed into a sideways hop.
+- When a trace's end position is free, the whole path used to count as clear, so long traces
+  skipped thin obstacles (a 14 cm ladder with nothing behind it was invisible to the 1.2 m
+  ladder check). Now, if the sweep saw a hit, it probes just past it before trusting that.
 
 ## Testing
 

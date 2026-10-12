@@ -115,7 +115,7 @@ namespace ShooterMashup.Player
                 "\n<color=#aaa>WASD move, Space jump, C/Ctrl crouch, X prone,\n" +
                 "Shift sprint, Alt walk, Q/E lean, double-tap W crouched = prone\n" +
                 "F1 noclip, F2 respawn, F3 hide, F4 ShooterMash/ET-exact, Esc free mouse\n" +
-                "2 / 3 build tool (2.5 m or 3 m kit)</color>";
+                "B build tool</color>";
             GUI.Label(new Rect(12, 10, 520, 260), text, style);
 
             // Stamina and health bars, bottom left like ET.

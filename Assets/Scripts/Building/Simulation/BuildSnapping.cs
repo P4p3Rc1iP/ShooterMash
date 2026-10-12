@@ -21,8 +21,8 @@ namespace ShooterMashup.Building
     /// <item>never a placement that sinks into an existing piece (more than overlapLimit of
     ///   either one's volume; small overlaps like a floor flush on a wall top are fine; the
     ///   build tool allows much more when you pick the snap point yourself),</item>
-    /// <item>with preferAimedFace: placements on the face you aim at (out in front of it) first,
-    ///   Minecraft style, so aiming at a slab's top stacks on it and at its side goes beside,</item>
+    /// <item>then placements on the face you aim at (out in front of it), Minecraft style, so
+    ///   aiming at a slab's top stacks on it and at its side or the ground beside it goes beside,</item>
     /// <item>then the best fit: the most snap points lining up with the target, so pieces sit
     ///   neatly side by side rather than half offset,</item>
     /// <item>then the one closest to a point just off the aimed surface, so a wall put on a
@@ -54,8 +54,7 @@ namespace ShooterMashup.Building
         static readonly List<Piece> Neighbours = new List<Piece>();
 
         public static SnapResult Snap(BuildSystem system, PieceDef def, Vector3 aim, Vector3 surfaceNormal,
-            Quaternion userRotation, int heldIndex, float radius, float overlapLimit = DefaultOverlapLimit,
-            bool preferAimedFace = false)
+            Quaternion userRotation, int heldIndex, float radius, float overlapLimit = DefaultOverlapLimit)
         {
             var none = new SnapResult { heldIndex = -1, targetId = -1 };
             if (def.snapPoints.Length == 0)
@@ -115,10 +114,10 @@ namespace ShooterMashup.Building
                             continue;
 
                         Vector3 center = BoxesCenter(boxes);
-                        // Aimed-face rule: placements that sit on the face you aim at (out in front of
-                        // it) beat any that don't, before the fit is even compared.
-                        int face = preferAimedFace && Vector3.Dot(center - aim, surfaceNormal) > InFrontMargin ? 1 : 0;
-                        int fit = Coinciding(def, position, rotation, target, !preferAimedFace);
+                        // Placements that sit on the face you aim at (out in front of it) beat any that
+                        // don't, before the fit is even compared.
+                        int face = Vector3.Dot(center - aim, surfaceNormal) > InFrontMargin ? 1 : 0;
+                        int fit = Coinciding(def, position, rotation, target);
                         float distance = Vector3.Distance(center, reference);
                         if (face < bestFace || (face == bestFace && (fit < bestFit || (fit == bestFit && distance >= bestDistance))))
                             continue;
@@ -145,21 +144,15 @@ namespace ShooterMashup.Building
         }
 
         /// <summary>How many of the held piece's snap points land on one of the target's.</summary>
-        static int Coinciding(PieceDef def, Vector3 position, Quaternion rotation, Piece target, bool matchFaces)
+        static int Coinciding(PieceDef def, Vector3 position, Quaternion rotation, Piece target)
         {
             int count = 0;
-            for (int i = 0; i < def.snapPoints.Length; i++)
+            foreach (Vector3 s in def.snapPoints)
             {
-                Vector3 w = position + rotation * def.snapPoints[i];
-                for (int j = 0; j < target.def.snapPoints.Length; j++)
+                Vector3 w = position + rotation * s;
+                foreach (Vector3 ts in target.def.snapPoints)
                 {
-                    // Without the aimed-face rule, only top on top or bottom on bottom counts: a slab
-                    // stacked on another lines up a whole face of points, but that's not what aiming
-                    // near its edge usually means. With it, the face decides on top vs beside, and
-                    // then every point counts so a stack lines up neatly.
-                    if (matchFaces && !SameFace(def.snapFaces[i], target.def.snapFaces[j]))
-                        continue;
-                    if ((target.record.position + target.record.rotation * target.def.snapPoints[j] - w).sqrMagnitude < SamePoint * SamePoint)
+                    if ((target.record.position + target.record.rotation * ts - w).sqrMagnitude < SamePoint * SamePoint)
                     {
                         count++;
                         break;
@@ -168,8 +161,6 @@ namespace ShooterMashup.Building
             }
             return count;
         }
-
-        static bool SameFace(SnapFace a, SnapFace b) => a == SnapFace.Any || b == SnapFace.Any || a == b;
 
         static bool SinksIntoNeighbours(Obb[] boxes, float limit)
         {

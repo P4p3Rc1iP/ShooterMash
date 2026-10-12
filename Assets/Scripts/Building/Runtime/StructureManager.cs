@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ShooterMashup.Player;
 using UnityEngine;
 
 namespace ShooterMashup.Building
@@ -173,6 +174,8 @@ namespace ShooterMashup.Building
             GameObject go = CreatePieceObject(p.def, MaterialFor(p.record.material), true, $"{p.record.material} {p.def.name} #{id}", transform);
             go.transform.SetPositionAndRotation(p.record.position, p.record.rotation);
             go.AddComponent<BuildPieceTag>().id = id;
+            if (p.def.Surface != 0)
+                go.AddComponent<PmSurface>().flags = p.def.Surface; // e.g. ladders
             views[id] = new View { go = go, renderers = go.GetComponentsInChildren<Renderer>() };
         }
 

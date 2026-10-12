@@ -39,9 +39,8 @@ namespace ShooterMashup.Building.Tests
                 PieceDef def = PieceCatalog.All[type];
                 if (!def.name.StartsWith("Stairs"))
                     continue;
-                string kit = PieceCatalog.Kits[def.Kit].name;
                 foreach (MovePreset preset in new[] { MovePreset.ShooterMash, MovePreset.EtExact })
-                    yield return new TestCaseData(type, preset).SetName($"Stairs_AreWalkable({def.name}, {kit} kit, {preset})");
+                    yield return new TestCaseData(type, preset).SetName($"Stairs_AreWalkable({def.name}, {preset})");
             }
         }
 
@@ -71,6 +70,47 @@ namespace ShooterMashup.Building.Tests
                 highest = Mathf.Max(highest, st.origin.y - Base.y + cfg.mins.y);
             }
             Assert.AreEqual(rise, highest, 0.05f, "feet should reach the top");
+        }
+
+        [Test]
+        public void LadderPieces_AreClimbable()
+        {
+            // Three 3 m ladders stacked 3 m ahead, facing the player, as the view builds them: the
+            // piece's boxes as colliders, with the piece's surface flags. Nothing behind them (like
+            // the showcase tower's open frame), so the ladder is a thin obstacle on its own.
+            PieceDef ladder = System.Array.Find(PieceCatalog.All, d => d.name == "Ladder 3 m");
+            Assert.AreEqual(SurfaceFlags.Ladder, ladder.Surface);
+            Box(new Vector3(0, -0.4f, 0), new Vector3(50, 0.8f, 50));
+            Quaternion facing = Quaternion.Euler(0, 180, 0);                // rungs towards -z
+            for (int level = 0; level < 3; level++)
+            {
+                var root = new GameObject("Ladder");
+                root.transform.SetPositionAndRotation(Base + new Vector3(0, 3f * level, 3.4f), facing);
+                root.AddComponent<PmSurface>().flags = ladder.Surface;
+                objects.Add(root);
+                foreach (Obb o in ladder.boxes)
+                {
+                    var child = new GameObject("Part");
+                    child.transform.SetParent(root.transform, false);
+                    child.transform.localPosition = o.center;
+                    child.transform.localRotation = o.rotation;
+                    child.AddComponent<BoxCollider>().size = o.Size;
+                }
+            }
+            Physics.SyncTransforms();
+
+            var cfg = new MoveConfig();
+            MovePresets.Apply(cfg, MovePreset.ShooterMash);
+            var pmove = new PlayerMove(cfg, new UnityPmoveWorld(Physics.DefaultRaycastLayers));
+            PlayerState st = PlayerState.Spawn(Base + new Vector3(0, -cfg.mins.y, 0), cfg, 1000);
+            bool onLadder = false;
+            for (int t = 1000; t < 1000 + 3000; t += Tick)
+            {
+                pmove.Move(ref st, new PlayerCmd { serverTime = t + Tick, forwardMove = 127 });
+                onLadder |= st.IsOnLadder;
+            }
+            Assert.IsTrue(onLadder, "should get onto the ladder");
+            Assert.Greater(st.origin.y - Base.y + cfg.mins.y, 5f, "and climb it");
         }
 
         [Test]

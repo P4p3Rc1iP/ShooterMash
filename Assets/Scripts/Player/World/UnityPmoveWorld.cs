@@ -85,7 +85,13 @@ namespace ShooterMashup.Player
             // Bisect for the exact contact distance: lo is always free, hi always blocked.
             float hi = limit;
             if (IsFree(c0, dir, hi, halfExtents, out Collider blocker))
-                return Clear(end); // nothing, or the real contact is beyond this move
+            {
+                // The end is free. Either there's nothing in the way, or the real contact is beyond
+                // this move, or the box passes right through something thin (a ladder, a plank) on
+                // the way. If the sweep saw something, look just past where it says it is.
+                if (best < 0 || !FindThinBlocker(c0, dir, approx, limit, halfExtents, out hi, out blocker))
+                    return Clear(end);
+            }
 
             float lo = best >= 0 ? Mathf.Clamp(approx, 0f, limit) : 0f;
             if (lo > 0f && !IsFree(c0, dir, lo, halfExtents, out _))
@@ -165,6 +171,26 @@ namespace ShooterMashup.Player
                 Quaternion.identity, solidMask, QueryTriggerInteraction.Ignore);
             blocker = n > 0 ? overlaps[0] : null;
             return n == 0;
+        }
+
+        /// <summary>
+        /// The sweep hit something at about <paramref name="approx"/> but the end of the move is
+        /// free: probe a little past the hit (the sweep reports up to ~1.5 cm early) for a thin
+        /// obstacle the box would pass through. Finds the blocked distance to bisect towards.
+        /// </summary>
+        bool FindThinBlocker(Vector3 center, Vector3 dir, float approx, float limit, Vector3 halfExtents,
+            out float blocked, out Collider blocker)
+        {
+            float from = Mathf.Max(0f, approx);
+            for (float probe = 0.01f; probe <= 0.08f; probe *= 2f)
+            {
+                blocked = Mathf.Min(limit, from + probe);
+                if (!IsFree(center, dir, blocked, halfExtents, out blocker))
+                    return true;
+            }
+            blocked = limit;
+            blocker = null;
+            return false;
         }
 
         public Contents PointContents(Vector3 point)

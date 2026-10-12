@@ -496,6 +496,19 @@ namespace ShooterMashup.Player.Tests
         // ------------------------------------------------------------------ ladders and water
 
         [Test]
+        public void LongTrace_DoesNotSkipAThinObstacle()
+        {
+            // A 5 cm plank with nothing behind it: a 1.2 m hull trace ends past it, in free space,
+            // but must still stop at it (the ladder check traces this far ahead).
+            Box(new Vector3(0, 1f, 1f), new Vector3(2f, 2f, 0.05f));
+            var world = new UnityPmoveWorld(Physics.DefaultRaycastLayers);
+            Vector3 start = Base + new Vector3(0, StandOriginY, 0);
+            TraceResult tr = world.Trace(start, start + new Vector3(0, 0, 1.2f), cfg.mins, cfg.maxs);
+            Assert.Less(tr.fraction, 1f, "should hit the plank");
+            Assert.AreEqual(1f - 0.025f - cfg.maxs.z, tr.endPos.z - Base.z, 0.02f, "and stop against it");
+        }
+
+        [Test]
         public void Ladder_ClimbsWhenPushingForward()
         {
             Box(new Vector3(0, 6.4f, 3.2f), new Vector3(6.4f, 12.8f, 1.6f));
