@@ -107,9 +107,16 @@ Agreed with the owner:
   jump, stamina, steps, slopes, fall damage, tunnels, lean, ladders, water, modifiers, presets,
   determinism), and the building system (support, collapse, undo, snapping) in
   `Assets/Tests/EditMode/Building`. Run them in Window > General > Test Runner.
-- The Unity editor is usually open, so batch-mode Unity can't run on this project folder. To
-  test from the command line, copy `Assets`, `Packages` and `ProjectSettings` to a scratch
-  folder and run there:
+- **Preferred: drive the owner's open Editor** with the Unity CLI (`unity` on PATH) through the
+  `com.unity.pipeline` package (installed 2026-10-12). `unity status` should show state "ready";
+  `unity command` lists ~200 commands (run_tests, editor_play/stop, simulate_key, capture_game_view,
+  console, get_scene_hierarchy, eval...). Pass `--caller plugin --skill unity-cli` on each
+  `unity command` call. Edit scenes through the Editor, not by hand-editing `.unity` YAML. The
+  Editor imports changed scripts/packages when its window gets focus, so ask the owner to click
+  into Unity if a change hasn't been picked up.
+- Fallback when no Editor is connected: batch-mode Unity can't run on this project folder while
+  the Editor has it open. Copy `Assets`, `Packages` and `ProjectSettings` to a scratch folder and
+  run there:
   `Unity.exe -batchmode -nographics -projectPath <copy> -runTests -testPlatform EditMode -testResults <file>`
 - To *see* something without the owner, drop the `-nographics` flag and run a throwaway
   play-mode test in the copy that renders a camera to a RenderTexture and saves a PNG. After
