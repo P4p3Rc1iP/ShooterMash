@@ -50,7 +50,8 @@ Runtime/      Unity glue for a local player
 - **Presets.** `PlayerMotor` has a preset dropdown (F4 in play mode). *ShooterMash* is the
   default: ET rounded to metric (1.8 m tall, 6.4 m/s run, 20 m/s² gravity, fall damage from
   6 m...) plus changes for building: 0.52 m steps (so 50 cm steps can be run up) and a 0.6 m
-  prone hull that fits under a floor on 1 m pillars. *ET exact* is the original, for comparison.
+  prone hull that fits under a floor on 1 m pillars. Stamina is more forgiving: a full bar
+  lasts 10 s of sprint (ET: 4 s) and refills twice as fast. *ET exact* is the original, for comparison.
   Picking one overwrites those values in `movement`; see `MovePresets.cs`.
   (ET's prone hull is 1.02 m, taller than its eyes; `MoveConfig.proneHeight` sets it separately.)
 - **The transform is the simulation origin**, 0.61 m above the feet, as in ET.

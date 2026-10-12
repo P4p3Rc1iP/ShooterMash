@@ -36,7 +36,8 @@ Key decisions so far:
   multiples of an `Inch` constant so they can still be compared with the ET source.
 - **Presets:** `MovePreset.ShooterMash` is the default and our own value set: ET rounded to metric
   (1.8 m, 6.4 m/s run, 20 m/s² gravity...) plus building-driven changes: 0.52 m step height (run
-  up 50 cm steps) and a 0.6 m prone hull (fits under a floor on 1 m pillars, 0.8 m clearance).
+  up 50 cm steps), a 0.6 m prone hull (fits under a floor on 1 m pillars, 0.8 m clearance),
+  and gentler stamina (drain 0.1/s = 10 s of sprint, regen 0.05/s; ET: 0.25 and 0.025).
   `EtExact` is kept for comparison; F4 toggles them in play mode.
 - **No velocity rounding:** ET's "125 fps jump" quirk was removed on purpose.
 - **Strafe jumping** is ET-faithful; `MoveConfig.maxAirSpeed` can tame it later.
@@ -124,4 +125,4 @@ Agreed with the owner:
   `.meta` files differ from the copy's old scene.
 - Test map: menu **ShooterMashup > Build Movement Test Map** regenerates
   `Assets/Scenes/MovementTest.unity` (stairs, ramps, crates, tunnels, ladders, fall towers,
-  water, slick floor, strafe lane, and a building area with diggable dirt and bridge cliffs).
+  water and slime tanks, slick floor, strafe lane, and a building area with diggable dirt and bridge cliffs).

@@ -9,14 +9,16 @@ namespace ShooterMashup.Player
         /// <summary>
         /// Our own values: ET rounded to friendly metric numbers (1-2% different), plus changes for
         /// building: a lower prone hull that fits under a floor on 1 m pillars, and 50 cm steps.
+        /// Stamina is more forgiving than ET's.
         /// </summary>
         ShooterMash,
     }
 
     /// <summary>
-    /// Writes a set of dimensional values (sizes, speeds, gravity, heights) into a MoveConfig.
-    /// Unitless values (scales, acceleration, friction, timings, stamina) and feature toggles
-    /// are the same in both presets and are left alone.
+    /// Writes a set of values into a MoveConfig: dimensional ones (sizes, speeds, gravity,
+    /// heights) and the stamina drain and regen rates. Other unitless values (scales,
+    /// acceleration, friction, timings) and feature toggles are the same in both presets and
+    /// are left alone.
     /// </summary>
     public static class MovePresets
     {
@@ -46,6 +48,9 @@ namespace ShooterMashup.Player
             c.gravity = 20.32f;
             c.jumpVelocity = 6.858f;                                 // 1.157 m jump
             c.stopSpeed = 2.54f;
+
+            c.staminaDrainPerSecond = 0.25f;                         // a full bar lasts 4 s of sprint
+            c.staminaRegenPerSecond = 0.025f;
 
             c.leanMax = 0.7112f;
             c.leanMins = new Vector3(-0.2032f, -0.1778f, -0.2032f);
@@ -80,6 +85,9 @@ namespace ShooterMashup.Player
             c.gravity = 20f;
             c.jumpVelocity = 6.8f;                                   // 1.156 m jump
             c.stopSpeed = 2.5f;
+
+            c.staminaDrainPerSecond = 0.1f;                          // more forgiving: 10 s of sprint
+            c.staminaRegenPerSecond = 0.05f;                         // and twice ET's regen
 
             c.leanMax = 0.7f;
             c.leanMins = new Vector3(-0.2f, -0.18f, -0.2f);

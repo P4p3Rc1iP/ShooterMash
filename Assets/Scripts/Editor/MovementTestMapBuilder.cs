@@ -11,7 +11,7 @@ namespace ShooterMashup.EditorTools
 {
     /// <summary>
     /// Builds a graybox test map for the player controller: stairs, ramps, jump crates,
-    /// crouch and prone tunnels, ladders, fall-damage towers, a water tank, a slick floor
+    /// crouch and prone tunnels, ladders, fall-damage towers, water and slime tanks, a slick floor
     /// and a strafe-jump lane. Laid out in metres on a 1 m dev grid.
     /// </summary>
     public static class MovementTestMapBuilder
@@ -24,7 +24,7 @@ namespace ShooterMashup.EditorTools
         static Transform root;
         static Object meshContainer;
         static readonly Dictionary<string, Mesh> MeshCache = new Dictionary<string, Mesh>();
-        static Material matFloor, matWall, matTrim, matLadder, matSlick, matWater, matTarget, matDirt;
+        static Material matFloor, matWall, matTrim, matLadder, matSlick, matWater, matSlime, matTarget, matDirt;
         static Font labelFont;
 
         [MenuItem("ShooterMashup/Build Movement Test Map")]
@@ -61,7 +61,8 @@ namespace ShooterMashup.EditorTools
             BuildTunnels(new Vector3(-23, 0, 23));
             BuildLadderTower(new Vector3(-8, 0, -18));
             BuildFallTowers(new Vector3(5, 0, -18));
-            BuildWaterTank(new Vector3(8, 0, 33));
+            BuildLiquidTank(new Vector3(8, 0, 33), Contents.Water, matWater, "water");
+            BuildLiquidTank(new Vector3(26, 0, 33), Contents.Slime, matSlime, "slime\nslower swimming");
             BuildLeanCorner(new Vector3(-33, 0, -8));
             BuildSlickFloor(new Vector3(28, 0, -5));
             BuildStrafeLane(-38);
@@ -210,9 +211,9 @@ namespace ShooterMashup.EditorTools
             ladder.AddComponent<PmSurface>().flags = SurfaceFlags.Ladder;
         }
 
-        static void BuildWaterTank(Vector3 at)
+        static void BuildLiquidTank(Vector3 at, Contents contents, Material liquidMat, string label)
         {
-            var parent = Group("Water tank");
+            var parent = Group(contents + " tank");
             const float inner = 13, wall = 0.8f, high = 5, water = 4;
             float zMin = at.z, zMax = at.z + inner;
             float zc = (zMin + zMax) / 2;
@@ -233,13 +234,13 @@ namespace ShooterMashup.EditorTools
                 Box($"Tank step {k}", new Vector3(at.x, h / 2, z), new Vector3(3.2f, h, tread), k % 2 == 0 ? matWall : matTrim, parent);
             }
 
-            var waterGo = Box("Water", new Vector3(at.x, water / 2, zc), new Vector3(inner, water, inner), matWater, parent);
+            var waterGo = Box(contents.ToString(), new Vector3(at.x, water / 2, zc), new Vector3(inner, water, inner), liquidMat, parent);
             waterGo.GetComponent<BoxCollider>().isTrigger = true;
             waterGo.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
-            waterGo.AddComponent<LiquidVolume>().contents = Contents.Water;
+            waterGo.AddComponent<LiquidVolume>().contents = contents;
             GameObjectUtility.SetStaticEditorFlags(waterGo, 0);
 
-            Label("water", new Vector3(at.x, 5f, zMin - 5.6f), parent);
+            Label(label, new Vector3(at.x, 5f, zMin - 5.6f), parent);
         }
 
         static void BuildLeanCorner(Vector3 at)
@@ -452,6 +453,8 @@ namespace ShooterMashup.EditorTools
             matWater = Mat("DevWater", null, new Color(0.15f, 0.4f, 0.6f, 0.45f), 0.95f);
             matDirt = Mat("DevDirt", grid, new Color(0.5f, 0.38f, 0.26f));
             MakeTransparent(matWater);
+            matSlime = Mat("DevSlime", null, new Color(0.35f, 0.75f, 0.15f, 0.6f), 0.95f);
+            MakeTransparent(matSlime);
         }
 
         static Material Mat(string name, Texture2D tex, Color color, float smoothness = 0.15f)
