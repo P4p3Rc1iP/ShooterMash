@@ -37,8 +37,9 @@ namespace ShooterMashup.Building
             Solve(previewSeeds, id, false, wouldCollapse);
         }
 
-        float Loss(in MaterialStats stats, float verticality) =>
-            stats.maxSupport * Mathf.Lerp(stats.horizontalLoss, stats.verticalLoss, verticality);
+        /// <summary>Support lost over one connection: the material's loss rate, blended by direction, per lossLength metres of the piece.</summary>
+        float Loss(in MaterialStats stats, float verticality, float length) =>
+            stats.maxSupport * Mathf.Lerp(stats.horizontalLoss, stats.verticalLoss, verticality) * length / cfg.lossLength;
 
         /// <summary>Support a piece not yet in the world would get from its links.</summary>
         float Evaluate(Piece p)
@@ -51,7 +52,7 @@ namespace ShooterMashup.Building
             foreach (Link link in p.links)
             {
                 Piece n = pieces[link.other];
-                float s = Mathf.Min(stats.maxSupport, n.support) - Loss(stats, link.verticality);
+                float s = Mathf.Min(stats.maxSupport, n.support) - Loss(stats, link.verticality, link.length);
                 if (s > result)
                     result = s;
             }
@@ -123,7 +124,7 @@ namespace ShooterMashup.Building
                     if (link.other == excluded || done.Contains(link.other))
                         continue;
                     MaterialStats ns = StatsOf(pieces[link.other]);
-                    float candidate = Mathf.Min(ns.maxSupport, top.support) - Loss(ns, link.otherVerticality);
+                    float candidate = Mathf.Min(ns.maxSupport, top.support) - Loss(ns, link.otherVerticality, link.otherLength);
                     if (best.TryGetValue(link.other, out float old))
                     {
                         if (candidate <= old)

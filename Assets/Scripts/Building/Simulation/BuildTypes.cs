@@ -14,17 +14,19 @@ namespace ShooterMashup.Building
     /// <summary>
     /// How a material carries load, Valheim style. A piece touching the ground gets maxSupport.
     /// Every other piece gets its best neighbour's support (capped at its own maxSupport), minus
-    /// maxSupport * loss, where the loss blends between horizontal and vertical by the angle of
-    /// the connection. Below minSupport the piece breaks.
+    /// maxSupport * loss, where the loss blends between horizontal and vertical by the direction
+    /// of the connection. Unlike Valheim, losses are per BuildConfig.lossLength metres of the
+    /// piece, not per piece, so small pieces reach as far as big ones. Below minSupport the
+    /// piece breaks.
     /// </summary>
     [Serializable]
     public struct MaterialStats
     {
         public float maxSupport;
         public float minSupport;
-        [Tooltip("Fraction of maxSupport lost per piece when stacking up (or hanging down).")]
+        [Tooltip("Fraction of maxSupport lost per lossLength metres when stacking up (or hanging down).")]
         public float verticalLoss;
-        [Tooltip("Fraction of maxSupport lost per piece when building sideways.")]
+        [Tooltip("Fraction of maxSupport lost per lossLength metres when building sideways.")]
         public float horizontalLoss;
 
         public MaterialStats(float maxSupport, float minSupport, float verticalLoss, float horizontalLoss)
@@ -45,10 +47,14 @@ namespace ShooterMashup.Building
         [Tooltip("Players can undo and redo their own recent build actions.")]
         public bool undo = true;
 
-        [Header("Materials (Valheim values)")]
+        [Header("Materials (Valheim values, per 2.5 m piece)")]
         public MaterialStats wood = new MaterialStats(100f, 10f, 0.125f, 0.2f);
-        public MaterialStats stone = new MaterialStats(1000f, 100f, 0.125f, 1f);
+        [Tooltip("Valheim stone can't overhang at all (horizontal loss 1 per piece). Per metre that would allow " +
+                 "2.25 m, so it's 4 here: stone sticks out about 0.5 m at most.")]
+        public MaterialStats stone = new MaterialStats(1000f, 100f, 0.125f, 4f);
         public MaterialStats iron = new MaterialStats(1500f, 20f, 0.077f, 0.077f);
+        [Tooltip("The losses above are per this many metres of a piece (one 2.5 m grid unit or storey).")]
+        public float lossLength = 2.5f;
 
         [Header("Geometry (m)")]
         [Tooltip("Pieces closer than this count as touching each other.")]
@@ -115,6 +121,7 @@ namespace ShooterMashup.Building
     {
         None,
         UnknownPiece,
+        WrongMaterial,    // that piece doesn't come in that material
         Blocked,          // would overlap a player
         Unsupported,      // would collapse straight away
         NotFound,

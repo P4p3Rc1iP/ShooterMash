@@ -277,10 +277,18 @@ namespace ShooterMashup.EditorTools
         static void BuildBuildingArea(Vector3 at)
         {
             var parent = Group("Building area");
-            Label("building area\nB: build tool", new Vector3(at.x, 4f, at.z - 22f), parent);
+            Label("building area\n2 / 3: build tool\n(2.5 m or 3 m kit)", new Vector3(at.x, 4f, at.z - 22f), parent);
 
             // Owns all placed pieces.
-            new GameObject("Structures").AddComponent<StructureManager>();
+            var structures = new GameObject("Structures");
+            structures.AddComponent<StructureManager>();
+
+            // Two example structures, built from real pieces when play starts.
+            var showcase = structures.AddComponent<BuildShowcase>();
+            showcase.houseCorner = new Vector3(48f, 0f, 20f);
+            showcase.pavilionCorner = new Vector3(48f, 0f, 35f);
+            Label("2.5 m kit\nhouse", new Vector3(51.75f, 7f, 18.5f), parent);
+            Label("3 m kit\npavilion", new Vector3(52.5f, 8.5f, 32f), parent);
 
             // Diggable ground: a 1 m thick pad of blocks standing in for voxel terrain.
             Vector3 pad = new Vector3(at.x - 4f, 0f, at.z - 16f); // corner

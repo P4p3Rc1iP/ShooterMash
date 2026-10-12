@@ -34,16 +34,21 @@ namespace ShooterMashup.Building.Tests
 
         static IEnumerable<TestCaseData> AllStairs()
         {
-            foreach (PieceDef def in PieceCatalog.All)
-                if (def.name.StartsWith("Stairs"))
-                    foreach (MovePreset preset in new[] { MovePreset.ShooterMash, MovePreset.EtExact })
-                        yield return new TestCaseData(def.name, preset).SetName($"Stairs_AreWalkable({def.name}, {preset})");
+            for (int type = 0; type < PieceCatalog.All.Length; type++)
+            {
+                PieceDef def = PieceCatalog.All[type];
+                if (!def.name.StartsWith("Stairs"))
+                    continue;
+                string kit = PieceCatalog.Kits[def.Kit].name;
+                foreach (MovePreset preset in new[] { MovePreset.ShooterMash, MovePreset.EtExact })
+                    yield return new TestCaseData(type, preset).SetName($"Stairs_AreWalkable({def.name}, {kit} kit, {preset})");
+            }
         }
 
         [TestCaseSource(nameof(AllStairs))]
-        public void Stairs_AreWalkable(string name, MovePreset preset)
+        public void Stairs_AreWalkable(int type, MovePreset preset)
         {
-            PieceDef stairs = System.Array.Find(PieceCatalog.All, d => d.name == name);
+            PieceDef stairs = PieceCatalog.All[type];
             Bounds b = stairs.boxes[0].Bounds;
             foreach (Obb o in stairs.boxes) b.Encapsulate(o.Bounds);
             float rise = b.max.y, run = b.size.z;

@@ -29,12 +29,16 @@ namespace ShooterMashup.Building
         public readonly int other;
         public readonly float verticality;      // of this piece
         public readonly float otherVerticality; // of the other piece
+        public readonly float length;           // this piece's size in the direction it's supported (m)
+        public readonly float otherLength;
 
-        public Link(int other, float verticality, float otherVerticality)
+        public Link(int other, float verticality, float otherVerticality, float length, float otherLength)
         {
             this.other = other;
             this.verticality = verticality;
             this.otherVerticality = otherVerticality;
+            this.length = length;
+            this.otherLength = otherLength;
         }
     }
 
@@ -92,6 +96,8 @@ namespace ShooterMashup.Building
             PieceDef def = PieceCatalog.Get(type);
             if (def == null)
                 return new PlacementCheck { failure = BuildFailure.UnknownPiece };
+            if (!def.ComesIn(material))
+                return new PlacementCheck { failure = BuildFailure.WrongMaterial };
             Piece p = Create(new PieceRecord { id = 0, type = type, material = material, position = position, rotation = rotation });
             return Check(p);
         }
@@ -154,8 +160,11 @@ namespace ShooterMashup.Building
 
         BuildResult Place(in BuildCmd cmd)
         {
-            if (PieceCatalog.Get(cmd.pieceType) == null)
+            PieceDef placing = PieceCatalog.Get(cmd.pieceType);
+            if (placing == null)
                 return BuildResult.Fail(BuildFailure.UnknownPiece);
+            if (!placing.ComesIn(cmd.material))
+                return BuildResult.Fail(BuildFailure.WrongMaterial);
 
             Piece p = Create(new PieceRecord
             {
@@ -248,8 +257,8 @@ namespace ShooterMashup.Building
                 Piece n = pieces[id];
                 if (!n.bounds.Intersects(region) || !Touching(p, n))
                     continue;
-                Verticality(p, n, out float vp, out float vn);
-                p.links.Add(new Link(id, vp, vn));
+                Connection(p, n, out float vp, out float vn, out float lp, out float ln);
+                p.links.Add(new Link(id, vp, vn, lp, ln));
             }
         }
 
@@ -263,20 +272,63 @@ namespace ShooterMashup.Building
         }
 
         /// <summary>
-        /// How vertical each piece is relative to where they touch. The contact is approximated by
-        /// the middle of the overlap of their (slightly grown) bounding boxes.
+        /// How two touching pieces support each other: how vertical each one's connection is, and
+        /// how long each piece is in the direction it's supported (support loss is per metre).
+        ///
+        /// The contact is approximated by the overlap of their (slightly grown) bounding boxes. A
+        /// flat, horizontal overlap means one rests on the other: vertical, however offset (a block
+        /// half over the one below is still stacked). A thin upright overlap means side by side:
+        /// horizontal. Otherwise it goes by the angle from the middle of the overlap to each
+        /// piece's centre.
         /// </summary>
-        void Verticality(Piece a, Piece b, out float va, out float vb)
+        void Connection(Piece a, Piece b, out float va, out float vb, out float la, out float lb)
         {
             Bounds ba = a.bounds, bb = b.bounds;
             ba.Expand(cfg.connectTolerance * 2f);
             bb.Expand(cfg.connectTolerance * 2f);
-            Vector3 contact = (Vector3.Max(ba.min, bb.min) + Vector3.Min(ba.max, bb.max)) * 0.5f;
-            va = Vertical(a.bounds.center - contact);
-            vb = Vertical(b.bounds.center - contact);
+            Vector3 lo = Vector3.Max(ba.min, bb.min), hi = Vector3.Min(ba.max, bb.max);
+            Vector3 size = hi - lo;
+            Vector3 contact = (lo + hi) * 0.5f;
+            float across = Mathf.Min(size.x, size.z);
+            if (size.y < across * 0.75f)
+            {
+                va = vb = 1f;
+            }
+            else if (across < size.y * 0.75f)
+            {
+                va = vb = 0f;
+            }
+            else
+            {
+                va = Vertical(a.bounds.center - contact);
+                vb = Vertical(b.bounds.center - contact);
+            }
+            la = SupportLength(a, contact, va);
+            lb = SupportLength(b, contact, vb);
         }
 
         static float Vertical(Vector3 d) => d.sqrMagnitude < 1e-6f ? 1f : Mathf.Abs(d.normalized.y);
+
+        /// <summary>
+        /// A piece's size along the way it's held: its height when stacked, and how far it reaches
+        /// out from the contact (its extent towards its centre) when held from the side.
+        /// </summary>
+        static float SupportLength(Piece p, Vector3 contact, float verticality)
+        {
+            Vector3 size = p.bounds.size;
+            var away = new Vector2(p.bounds.center.x - contact.x, p.bounds.center.z - contact.z);
+            float sideways;
+            if (away.sqrMagnitude < 1e-6f)
+            {
+                sideways = Mathf.Max(size.x, size.z);
+            }
+            else
+            {
+                away.Normalize();
+                sideways = Mathf.Abs(away.x) * size.x + Mathf.Abs(away.y) * size.z;
+            }
+            return Mathf.Lerp(sideways, size.y, verticality);
+        }
 
         void Insert(Piece p, int rev)
         {
@@ -284,7 +336,7 @@ namespace ShooterMashup.Building
             pieces[p.Id] = p;
             grid.Insert(p.Id, p.bounds);
             foreach (Link link in p.links)
-                pieces[link.other].links.Add(new Link(p.Id, link.otherVerticality, link.verticality));
+                pieces[link.other].links.Add(new Link(p.Id, link.otherVerticality, link.verticality, link.otherLength, link.length));
         }
 
         void Detach(int id)
