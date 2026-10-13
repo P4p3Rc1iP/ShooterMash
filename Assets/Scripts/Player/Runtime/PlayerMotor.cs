@@ -35,6 +35,8 @@ namespace ShooterMashup.Player
         public bool interpolate = true;
         [Tooltip("Ride moving things you stand on (vehicles, lifts, platforms): carried along, and keep their speed when you jump off.")]
         public bool ridePlatforms = true;
+        [Tooltip("Landing on a moving platform from elsewhere sticks: you stand still on it. Off: physically right (you slide if your speed doesn't match).")]
+        public bool stickyLandings = true;
 
         /// <summary>Raised for every movement event (footsteps, landings, jumps, steps...).</summary>
         public event Action<PmEvent> MoveEvent;
@@ -53,8 +55,11 @@ namespace ShooterMashup.Player
         public float SpawnYaw { get; set; }
 
         /// <summary>Interpolated simulation origin.</summary>
-        /// (On a moving platform it's shifted to stay on the platform as drawn, which is interpolated too.)
-        public Vector3 RenderOrigin => Vector3.LerpUnclamped(previousState.origin, state.origin, InterpolationAlpha) + rider.RenderOffset;
+        /// (On a moving platform it's moved to stay on the platform as drawn, which is interpolated too.)
+        public Vector3 RenderOrigin => rider.ToDrawn(Vector3.LerpUnclamped(previousState.origin, state.origin, InterpolationAlpha));
+
+        /// <summary>Added to the view's yaw on a turning platform, to match it as drawn (degrees).</summary>
+        public float RenderYawOffset => rider.DrawnYawOffset;
 
         [SerializeField, HideInInspector] MovePreset appliedPreset = MovePreset.EtExact;
         PlayerState state;
@@ -174,9 +179,14 @@ namespace ShooterMashup.Player
             }
 
             if (ridePlatforms)
+            {
+                rider.StickyLandings = stickyLandings;
                 rider.UpdateGround(ref state, pmove.GroundObject);
+            }
             else
+            {
                 rider.Clear();
+            }
 
             InterpolationAlpha = interpolate ? (float)(accumulatorMs / msec) : 1f;
             transform.SetPositionAndRotation(RenderOrigin, Quaternion.Euler(0f, state.viewAngles.y, 0f));

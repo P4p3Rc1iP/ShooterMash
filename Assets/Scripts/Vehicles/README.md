@@ -75,9 +75,9 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
 ## Known gaps and next steps
 
 - **Riding** works (see the player controller's `PlatformRider`): stand on a vehicle and you're
-  carried along; jump and you keep its speed. A truck circles behind the spawn hub to try it
-  (`VehicleAutopilot`; sit in it to drive it yourself). Jumping on from a standstill makes you
-  slide back relative to the truck, as it should; run alongside and you land cleanly.
+  carried along, and jumps on it land where you took off, even while it turns. Jump off the side
+  and you keep its speed; jump on from the ground and you land standing still on it. A truck
+  circles behind the spawn hub to try it (`VehicleAutopilot`; sit in it to drive it yourself).
 - **Multiplayer:** planned as driver authority: the driver's machine runs the vehicle's physics
   and others see a smoothed copy. Rigid-body physics can't be predicted like player movement.
 - One wheel size, one seat, no engines or fuel; every vehicle accelerates alike.

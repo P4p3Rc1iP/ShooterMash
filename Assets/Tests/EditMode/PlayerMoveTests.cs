@@ -291,7 +291,7 @@ namespace ShooterMashup.Player.Tests
         }
 
         [Test]
-        public void JumpingOff_KeepsThePlatformsSpeed_LandingLosesIt()
+        public void Jumping_StaysWithThePlatformWhileAboveIt_ThenKeepsItsSpeed()
         {
             GameObject platform = PlatformUnderfoot();
             PlatformRider rider = StandOn(platform, new Vector3(5f, 0f, 0f));
@@ -299,21 +299,92 @@ namespace ShooterMashup.Player.Tests
             Run(Tick, up: 127);
             Assert.IsFalse(st.onGround);
             rider.UpdateGround(ref st, pmove.GroundObject);
-            Assert.AreEqual(5f, st.velocity.x, 0.01f, "jumped off at the platform's speed");
-            Assert.IsNull(rider.Platform);
+            Assert.AreEqual(platform.transform, rider.Platform, "still in its frame, above it");
+            Assert.AreEqual(0f, st.velocity.x, 0.01f, "moving with it, so no extra speed yet");
 
-            // Coming down onto it (it's moving at 5 m/s, and so are we): from then on we move
-            // relative to it, and it carries us.
+            // Out past its edge in the air: let go of it, keeping its momentum.
+            st.origin += new Vector3(4f, 0f, 0f);
+            Carry(rider);
+            Assert.IsNull(rider.Platform);
+            Assert.AreEqual(5f, st.velocity.x, 0.01f, "keeps the platform's speed");
+        }
+
+        /// <summary>Come down onto the platform (said to move at 5 m/s) from above, at `velocity`.</summary>
+        void LandOn(GameObject platform, PlatformRider rider, Vector3 velocity)
+        {
             Spawn(new Vector3(-1f, 3f, 5f));
-            st.velocity = new Vector3(5f, 0f, 0f);
+            st.velocity = velocity;
             for (int t = 0; t < 1500 && !st.onGround; t += Tick)
                 Run(Tick);
             Assert.IsTrue(st.onGround, "landed");
             Assert.AreEqual(platform.GetComponent<Collider>(), pmove.GroundObject, "on the platform");
+        }
+
+        [Test]
+        public void LandingOnAMovingPlatform_Sticks()
+        {
+            // Jumping onto the truck from the ground: you stand still on it, no sliding.
+            GameObject platform = PlatformUnderfoot();
+            var rider = new PlatformRider((t, p) => new Vector3(5f, 0f, 0f));
+            LandOn(platform, rider, new Vector3(2f, 0f, 0f));
+            rider.UpdateGround(ref st, pmove.GroundObject);
+            Assert.AreEqual(Vector2.zero, new Vector2(st.velocity.x, st.velocity.z), "standing still on it");
+            Assert.AreEqual(platform.transform, rider.Platform);
+        }
+
+        [Test]
+        public void LandingWithoutSticking_TakesThePlatformsSpeedOff()
+        {
+            // Physically right: what's left is your speed relative to it, and friction stops you sliding.
+            GameObject platform = PlatformUnderfoot();
+            var rider = new PlatformRider((t, p) => new Vector3(5f, 0f, 0f)) { StickyLandings = false };
+            LandOn(platform, rider, new Vector3(2f, 0f, 0f));
             float before = st.velocity.x;
             rider.UpdateGround(ref st, pmove.GroundObject);
-            Assert.AreEqual(before - 5f, st.velocity.x, 0.01f, "moving relative to the platform again");
-            Assert.AreEqual(platform.transform, rider.Platform);
+            Assert.AreEqual(before - 5f, st.velocity.x, 0.01f, "moving relative to the platform");
+        }
+
+        [Test]
+        public void JumpingOnATurningPlatform_TurnsWithIt()
+        {
+            // Walking on the platform at 0.5 m/s, jump; it turns 90° while we're in the air. We turn
+            // with it, still walking the same way relative to it, and land back on it.
+            GameObject platform = PlatformUnderfoot();
+            PlatformRider rider = StandOn(platform);
+            st.velocity = new Vector3(0.5f, 0f, 0f);
+            Run(Tick, up: 127);
+            var takeoff = new Vector3(st.velocity.x, 0f, st.velocity.z);
+            Vector3 relative = Pos - new Vector3(0f, Pos.y, 5f);
+            rider.UpdateGround(ref st, pmove.GroundObject);
+
+            platform.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+            Carry(rider);
+            Quaternion turn = Quaternion.Euler(0f, 90f, 0f);
+            AssertNear(turn * relative, Pos - new Vector3(0f, Pos.y, 5f), 0.01f);
+            AssertNear(turn * takeoff, new Vector3(st.velocity.x, 0f, st.velocity.z));
+
+            for (int t = 0; t < 1500 && !st.onGround; t += Tick)
+                Run(Tick);
+            Assert.IsTrue(st.onGround, "landed");
+            rider.UpdateGround(ref st, pmove.GroundObject);
+            Assert.AreEqual(platform.transform, rider.Platform, "back on it");
+        }
+
+        [Test]
+        public void LandingWithoutHittingTheFloor_DoesNotTurnTheFallSideways()
+        {
+            // A floor tilted 2° (a vehicle's deck rocking on its suspension), and the player falling
+            // at 6.8 m/s with their feet already within the ground check's reach: they land on it
+            // without the move hitting it. The fall must not become a run along the floor.
+            Box(new Vector3(0f, -0.15f, 10f), new Vector3(6f, 0.5f, 6f), Quaternion.Euler(0f, 0f, 2f)); // top 0.1 m above the floor
+            Physics.SyncTransforms();
+            // 3 mm above the floor's highest point under the hull (its uphill edge, 0.46 m out at 2°).
+            Spawn(new Vector3(0f, StandOriginY + 0.1f + 0.4572f * Mathf.Tan(2f * Mathf.Deg2Rad) + 0.003f, 10f));
+            st.velocity = new Vector3(0f, -6.8f, 0f);
+            Run(Tick);
+            Assert.IsTrue(st.onGround, "landed");
+            Run(Tick);
+            Assert.Less(HorizontalSpeed, 0.5f, "no sideways fling");
         }
 
         [Test]

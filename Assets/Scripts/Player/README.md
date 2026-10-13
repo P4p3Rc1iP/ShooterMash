@@ -85,8 +85,13 @@ Runtime/      Unity glue for a local player
   with a PhysX depenetration fallback. Players will get stuck in freshly placed voxels.
 - Mouse look is applied every rendered frame and the body is interpolated between ticks.
 - You ride moving platforms (anything with a Rigidbody: vehicles, lifts, `MovingPlatform`s):
-  `PlatformRider` carries and turns you with it each frame and hands over its velocity when you
-  jump off or land. ET only had brush movers pushing you; this is outside the deterministic step.
+  `PlatformRider` carries and turns you (view and velocity) with it each frame. Jumping keeps you
+  in its frame while you're above it; past its edge you let go and keep its velocity. Landing on
+  one from elsewhere sticks (`stickyLandings`). ET only had brush movers pushing you; this is
+  outside the deterministic step.
+- Landing clips your velocity against the ground even when the move didn't touch it (it ended
+  within the ground check's reach). ET didn't, and its walk code then turned the fall speed into a
+  run along any slightly tilted floor, flinging you sideways off a moving truck's deck.
 - The prone key is edge-triggered (one press = one toggle).
 - Stepping up rises only as far as there's headroom (Quake 3's later `PM_StepSlideMove`), and
   if a ceiling starting right above the step blocks the full-height step, lower steps are

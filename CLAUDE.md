@@ -129,10 +129,15 @@ Agreed with the owner:
   a smoothed copy), unlike the deterministic player movement.
 - **Riding (moving platforms, 2026-10-13):** `PlatformRider` in the player runtime carries a
   player standing on anything with a Rigidbody (vehicles, lifts, `MovingPlatform`s): moved and
-  turned with its physics pose each frame before the ticks (the drawn player is offset to match
-  the platform's interpolation), the view turns with it, stepping or jumping off adds its
-  velocity, landing on one subtracts it. It sits beside the deterministic simulation (which only
-  reports `GroundObject`): the platform's motion is an input. Toggle: `PlayerMotor.ridePlatforms`.
+  turned with its physics pose each frame before the ticks (the drawn player and the view are
+  moved and turned to the platform's interpolated pose; `PlayerView` must use `RenderOrigin`, or
+  riding jitters at the physics rate; was a 10 cm sawtooth on the truck); the view and the
+  player's (relative) velocity turn with it. Jumping or stepping off keeps you in its frame while
+  you're above it (a downward cast hits it), so jumps on a turning truck land where you took off;
+  past its footprint you let go and keep its velocity. Landing on a platform from elsewhere sticks
+  (owner's choice: you stand still on it; `PlayerMotor.stickyLandings`, off = physically right).
+  It sits beside the deterministic simulation (which only reports `GroundObject`): the platform's
+  motion is an input. Toggle: `PlayerMotor.ridePlatforms`.
 
 ## To-do / open questions
 
@@ -165,6 +170,13 @@ Agreed with the owner:
 - When a trace's end position is free, the whole path used to count as clear, so long traces
   skipped thin obstacles (a 14 cm ladder with nothing behind it was invisible to the 1.2 m
   ladder check). Now, if the sweep saw a hit, it probes just past it before trusting that.
+- `Physics.ComputePenetration` takes the collider's pose explicitly. A moving rigidbody's
+  transform is its interpolated (drawn) pose, up to a physics step from its colliders, so pass
+  the body's physics pose (`PhysicsPose`); with the transform, a truck's floor gave a 33° normal.
+- Landing without the move touching the floor (it ended within the ground check's 6 mm, e.g. a
+  deck rising to meet you) left the fall speed in place, and ET's walk code ("keep your speed on
+  slopes") then turned it into a 6 m/s run along any slightly tilted floor. Landing now clips the
+  velocity against the ground (`GroundTrace`), as hitting it would have.
 
 ## Testing
 

@@ -159,8 +159,31 @@ namespace ShooterMashup.Player
         {
             BoxCollider box = Probe();
             box.size = halfExtents * 2f;
+            PhysicsPose(other, out Vector3 position, out Quaternion rotation);
             return Physics.ComputePenetration(box, center, Quaternion.identity,
-                other, other.transform.position, other.transform.rotation, out normal, out _);
+                other, position, rotation, out normal, out _);
+        }
+
+        /// <summary>
+        /// Where a collider really is for physics. ComputePenetration takes the pose to test at, and
+        /// a moving rigidbody's transform is its interpolated (drawn) pose, up to a physics step away
+        /// from its colliders: on a truck at 6 m/s that's 12 cm, enough to turn the floor's normal
+        /// into a 33° slope that flings you sideways on landing. So use the body's physics pose.
+        /// </summary>
+        static void PhysicsPose(Collider c, out Vector3 position, out Quaternion rotation)
+        {
+            Transform t = c.transform;
+            Rigidbody body = c.attachedRigidbody;
+            if (body == null)
+            {
+                position = t.position;
+                rotation = t.rotation;
+                return;
+            }
+            Transform b = body.transform;
+            Quaternion toBody = Quaternion.Inverse(b.rotation);
+            position = body.position + body.rotation * (toBody * (t.position - b.position));
+            rotation = body.rotation * (toBody * t.rotation);
         }
 
         static TraceResult Clear(Vector3 end) => new TraceResult { fraction = 1f, endPos = end, normal = Vector3.up };
@@ -231,8 +254,9 @@ namespace ShooterMashup.Player
                 for (int i = 0; i < n; i++)
                 {
                     Collider other = overlaps[i];
+                    PhysicsPose(other, out Vector3 otherPosition, out Quaternion otherRotation);
                     if (Physics.ComputePenetration(box, c, Quaternion.identity,
-                            other, other.transform.position, other.transform.rotation,
+                            other, otherPosition, otherRotation,
                             out Vector3 direction, out float distance))
                     {
                         Vector3 push = direction * (distance + Skin);

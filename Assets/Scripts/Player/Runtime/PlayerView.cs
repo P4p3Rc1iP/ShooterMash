@@ -136,7 +136,7 @@ namespace ShooterMashup.Player
             float pitch = Mathf.Clamp(input.Pitch + s.deltaAngles.x, -PlayerMove.PitchLimit, PlayerMove.PitchLimit);
             if (s.IsProne)
                 pitch = Mathf.Clamp(pitch, -cfg.pronePitchLimit, cfg.pronePitchLimit);
-            float yaw = input.Yaw + s.deltaAngles.y;
+            float yaw = input.Yaw + s.deltaAngles.y + motor.RenderYawOffset;
             if (s.pmType == PmType.Dead)
             {
                 pitch = -15f;
@@ -181,7 +181,8 @@ namespace ShooterMashup.Player
             addRoll += (cycle & 1) != 0 ? -roll : roll;
 
             // Eye position.
-            Vector3 origin = Vector3.LerpUnclamped(prev.origin, s.origin, alpha);
+            // The motor's interpolated origin, which also keeps the view on a moving platform as drawn.
+            Vector3 origin = motor.RenderOrigin;
             float height = s.viewHeight;
 
             if (smoothStanceChanges)

@@ -68,6 +68,13 @@ namespace ShooterMashup.Player
                     ps.pmFlags |= PmFlags.TimeLand;
                     ps.pmTime = 250;
                 }
+
+                // Not in ET: if we landed without the move hitting the floor (it came within the
+                // ground check's reach, e.g. a moving deck rose to meet us), take away the speed
+                // into the ground now, as hitting it would have. Otherwise the walk code's "keep
+                // your speed on slopes" turns the fall into a run along the floor: on a deck tilted
+                // a degree or two, straight down becomes 6 m/s sideways.
+                ps.velocity = ClipVelocity(ps.velocity, trace.normal);
             }
 
             ps.onGround = true;
