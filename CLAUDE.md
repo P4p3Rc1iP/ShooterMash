@@ -100,8 +100,33 @@ Agreed with the owner:
   that spot. A removal's undo restores everything that collapsed with it.
 - Collapsed pieces vanish for now; physical, fading debris is wanted later (cosmetic only).
 - Same networking shape as movement: `BuildSystem.Execute(BuildCmd)` is pure and deterministic.
-- Vehicles are a separate, later step. The player controller has no moving-platform support
-  yet, which is the main risk there.
+- The build tool builds on a `BuildHost`: the world (`StructureManager`), a vehicle or a lift,
+  whichever the aimed collider belongs to, in that host's local space. `PieceViews` keeps any
+  host's piece GameObjects.
+
+## Vehicles (contraptions)
+
+Code is in `Assets/Scripts/Vehicles/`; read its `README.md` first. First prototype (2026-10-13).
+
+Agreed with the owner:
+- **Scrap Mechanic's lift, copied** (L): place it, build on it (the first piece starts a vehicle,
+  frozen on the lift), raise/lower it, put any vehicle back on it upright (recovery after a
+  flip), take it away to drive. Vehicles can only be built on while on a lift.
+- **Trailmakers-style driving:** no player-made joints or springs. A vehicle is one rigid body;
+  the wheel piece is raycast suspension done in code, springs sized to the vehicle's weight,
+  all wheels drive, the front half steer, forward is where the seat faces. Assists (low centre
+  of mass, grip forces raised towards it, self-levelling, upright in the air, downforce, extra
+  gravity, parking hold) make anything drive. All numbers in `VehicleTuning`.
+- Vehicles use the normal building pieces (a shed on a truck) plus vehicle-only parts (wheel,
+  driver seat; the world refuses them). Integrity on vehicles: connected is enough (zero
+  support loss, one anchor piece counts as grounded). One wheel size for now; car-scale pieces
+  (a 0.5 m grid) may come later.
+- F sits in a seat / gets out; W/S/A/D/Space drive; V cycles follow camera (default), first
+  person and free orbit.
+- **Multiplayer plan:** driver authority (the driver's machine simulates the vehicle, others see
+  a smoothed copy), unlike the deterministic player movement.
+- **Next big risk:** players can't ride on moving vehicles (no moving-platform support in the
+  player controller). Needed for boyz on a trukk.
 
 ## To-do / open questions
 
@@ -117,7 +142,7 @@ Agreed with the owner:
 - **Licensing:** the controller closely follows ET's GPL source (`bg_pmove.c`, `bg_slidemove.c`,
   `cg_view.c`). Fine for a prototype; shipping closed-source would need a clean-room rewrite or
   legal advice.
-- Weapons, interaction, resources and vehicles don't exist yet.
+- Weapons, interaction, resources, engines and fuel don't exist yet.
 - Building ideas not yet done: falling debris, a collapse "creak" warning, piece health,
   showing nearby snap points, a workbench / build-range rule, resource costs.
 
@@ -140,7 +165,9 @@ Agreed with the owner:
 - Edit-mode tests in `Assets/Tests/EditMode` check the controller against ET's numbers (speeds,
   jump, stamina, steps, slopes, fall damage, tunnels, lean, ladders, water, modifiers, presets,
   determinism), and the building system (support, collapse, undo, snapping) in
-  `Assets/Tests/EditMode/Building`. Run them in Window > General > Test Runner.
+  `Assets/Tests/EditMode/Building`, and vehicle build rules in `Assets/Tests/EditMode/Vehicles`.
+  Driving is checked live in play mode (the demo buggy, via `eval`: set `Vehicle.Driver` and
+  `SetControls`, read speed and pose). Run them in Window > General > Test Runner.
 - **Preferred: drive the owner's open Editor** with the Unity CLI (`unity` on PATH) through the
   `com.unity.pipeline` package (installed 2026-10-12). `unity status` should show state "ready";
   `unity command` lists ~200 commands (run_tests, editor_play/stop, simulate_key, capture_game_view,
@@ -166,4 +193,5 @@ Agreed with the owner:
   `.meta` files differ from the copy's old scene.
 - Test map: menu **ShooterMashup > Build Movement Test Map** regenerates
   `Assets/Scenes/MovementTest.unity` (stairs, ramps, crates, tunnels, ladders, fall towers,
-  water and slime tanks, slick floor, strafe lane, and a building area with diggable dirt and bridge cliffs).
+  water and slime tanks, slick floor, strafe lane, a building area with diggable dirt and bridge cliffs,
+  a demo buggy and a rough vehicle test track).

@@ -46,6 +46,8 @@ namespace ShooterMashup.Building
         public bool structuralIntegrity = true;
         [Tooltip("Players can undo and redo their own recent build actions.")]
         public bool undo = true;
+        [Tooltip("Vehicle parts (wheels, seats) can be built. On for vehicles, off for the world.")]
+        public bool vehicleParts;
 
         [Header("Materials (Valheim values, per 2.5 m piece)")]
         public MaterialStats wood = new MaterialStats(100f, 10f, 0.125f, 0.2f);
@@ -130,6 +132,8 @@ namespace ShooterMashup.Building
         UndoExpired,
         StructureChanged, // someone else changed it since, or undoing would knock other pieces down
         Disabled,
+        VehicleOnly,      // a vehicle part, built on the world
+        NotOnLift,        // vehicles can only be built on while they're on a lift
     }
 
     /// <summary>What a command (or a terrain change) did to the world.</summary>

@@ -127,6 +127,73 @@ namespace ShooterMashup.Building
             return mesh;
         }
 
+        static readonly Dictionary<(float, float), Mesh> Wheels = new Dictionary<(float, float), Mesh>();
+
+        /// <summary>A tyre: a cylinder with its axle along x, centred on the origin.</summary>
+        public static Mesh Wheel(float radius, float width)
+        {
+            if (Wheels.TryGetValue((radius, width), out Mesh cached) && cached != null)
+                return cached;
+
+            const int segments = 24;
+            var verts = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var tris = new List<int>();
+            float h = width / 2f;
+
+            // Tread: a quad strip round the axle, with its own normals so it shades smoothly.
+            for (int i = 0; i <= segments; i++)
+            {
+                float a = i * Mathf.PI * 2f / segments;
+                var n = new Vector3(0f, Mathf.Sin(a), Mathf.Cos(a));
+                verts.Add(new Vector3(-h, 0, 0) + n * radius);
+                verts.Add(new Vector3(h, 0, 0) + n * radius);
+                normals.Add(n);
+                normals.Add(n);
+                uvs.Add(new Vector2(i / (float)segments * 4f, 0f));
+                uvs.Add(new Vector2(i / (float)segments * 4f, 1f));
+                if (i < segments)
+                {
+                    int b = i * 2;
+                    tris.AddRange(new[] { b, b + 1, b + 3, b, b + 3, b + 2 });
+                }
+            }
+
+            // Side walls: triangle fans facing -x and +x.
+            foreach (float side in new[] { -1f, 1f })
+            {
+                int center = verts.Count;
+                var n = new Vector3(side, 0, 0);
+                verts.Add(new Vector3(side * h, 0, 0));
+                normals.Add(n);
+                uvs.Add(new Vector2(0.5f, 0.5f));
+                for (int i = 0; i <= segments; i++)
+                {
+                    float a = i * Mathf.PI * 2f / segments;
+                    verts.Add(new Vector3(side * h, Mathf.Sin(a) * radius, Mathf.Cos(a) * radius));
+                    normals.Add(n);
+                    uvs.Add(new Vector2(0.5f + Mathf.Cos(a) * 0.5f, 0.5f + Mathf.Sin(a) * 0.5f));
+                }
+                for (int i = 0; i < segments; i++)
+                {
+                    int a = center + 1 + i, b = a + 1;
+                    if (side > 0) tris.AddRange(new[] { center, b, a });
+                    else tris.AddRange(new[] { center, a, b });
+                }
+            }
+
+            var mesh = new Mesh { name = $"Wheel {radius:0.##}x{width:0.##}" };
+            mesh.SetVertices(verts);
+            mesh.SetNormals(normals);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateTangents();
+            mesh.RecalculateBounds();
+            Wheels[(radius, width)] = mesh;
+            return mesh;
+        }
+
         public static Material Lit(string name, Texture texture)
         {
             var mat = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = name };

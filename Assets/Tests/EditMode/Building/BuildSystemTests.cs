@@ -711,7 +711,7 @@ namespace ShooterMashup.Building.Tests
                 Assert.IsTrue(r.Ok, $"{p}: {r.failure}");
             }
             var used = new HashSet<(string, BuildMaterial)>(plan.Select(p => (p.name, p.material)));
-            var missing = PieceCatalog.All.SelectMany(d => d.Materials.Select(m => (d.name, m))).Where(x => !used.Contains(x)).ToList();
+            var missing = PieceCatalog.All.Where(d => !d.VehicleOnly).SelectMany(d => d.Materials.Select(m => (d.name, m))).Where(x => !used.Contains(x)).ToList();
             Assert.IsEmpty(missing, "not in the showcase: " + string.Join(", ", missing));
         }
 

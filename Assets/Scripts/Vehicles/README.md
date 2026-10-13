@@ -1,0 +1,82 @@
+# Vehicles (contraptions)
+
+First prototype of building and driving vehicles. The lift is copied from Scrap Mechanic; the
+driving model takes after Trailmakers, where whatever you build drives decently.
+
+## Try it
+
+Rebuild the test map and press Play. A demo buggy stands to the right of the spawn. A rough test
+track (washboard, side ridges, dunes, a jump, rocks) runs west from x = 58, z = -56, past the strafe lane.
+
+| Input | Action |
+| --- | --- |
+| F | sit in the seat you aim at / get out |
+| W / S | throttle / brake, then reverse |
+| A / D | steer |
+| Space | handbrake (the rear slides) |
+| V | camera: follow (default) → first person → free orbit (scroll zooms) |
+| L | lift tool |
+
+With the lift tool (L):
+
+| Input | Action |
+| --- | --- |
+| LMB on the ground | place your lift there (or move it, with whatever is on it) |
+| LMB on a vehicle | put it on your lift, upright: to work underneath it, or to recover it after a flip |
+| RMB | take the lift away: the vehicle drops and can drive |
+| Q / E | lower / raise the lift (0.5 to 3 m) |
+| Scroll | turn the lift |
+
+Build on a lift with the build tool (B). The first piece on an empty lift starts a vehicle. A
+vehicle can only be built on while it's on a lift. Every building piece works (a shed on a
+truck), plus two vehicle parts: the **wheel** (1 m, with suspension; snap it to a beam's side or
+the end of an axle beam; turn it 180° for the other side) and the **driver seat** (it faces the
+way the vehicle drives; it sits on top of a beam).
+
+## Layout
+
+```
+Vehicle.cs            the vehicle: a BuildHost with its own BuildSystem in its local space, one
+                      Rigidbody, mass from the pieces, raycast wheels and the driving assists
+VehicleBuildWorld.cs  "ground" for a vehicle's pieces: connected to the anchor piece is enough
+VehicleTuning.cs      every driving number, with tooltips
+Lift.cs               the lift: a platform; holds one vehicle frozen; builds new vehicles
+LiftTool.cs           the player's lift tool (L)
+VehicleDriver.cs      sitting, driving controls and the three cameras
+VehicleShowcase.cs    builds the demo buggy on a lift and drops it
+```
+
+## How it works
+
+- **Building.** A vehicle is a `BuildHost` (see `Building/Runtime/BuildHost.cs`): the build tool
+  aims at a collider and builds on the host it belongs to (the world, a vehicle, or a lift), in
+  that host's local space. So snapping, the menu, removal previews and undo work as usual.
+  `PieceViews` keeps the pieces' GameObjects under the vehicle's body, so their colliders make
+  up its compound collider.
+- **Connected is enough.** Vehicle materials have zero support loss, and one piece (the anchor)
+  counts as grounded: anything connected to it holds, anything cut off falls off (vanishes,
+  like collapsed building pieces). The first piece must rest on the lift.
+- **Mass** is each piece's volume times its material's density (wood 500, stone 2400, iron
+  7800 kg/m³), plus 40 kg per wheel. Inertia comes from the pieces' boxes.
+- **Wheels** are raycast suspension, no joints: a spring and damper sized to the vehicle's
+  weight (every wheel carries its share, sitting 45% into its travel), grip in a friction
+  circle, all wheels driven, the front half of the wheels steering (the frontmost most).
+  Forward is where the seat faces.
+- **Assists** (what makes anything drive): the centre of mass is held low, grip forces act
+  partway up towards it (less body roll), the body levels itself to the ground and turns
+  upright in the air, a little downforce, extra gravity, and it holds still when parked.
+  Acceleration is the same for any weight until engines exist.
+- **The lift** freezes the vehicle (kinematic body) and sets its pose; taking it away makes the
+  body dynamic again. Putting a vehicle on it rests the vehicle's lowest point (usually the
+  tyres at full droop) on the platform; adding parts that hang lower raises it.
+
+## Known gaps and next steps
+
+- **Players don't ride along.** The player controller has no moving-platform support: standing on
+  a moving vehicle, you slide off. Needed for boyz on the back of a trukk; the next big piece.
+- **Multiplayer:** planned as driver authority: the driver's machine runs the vehicle's physics
+  and others see a smoothed copy. Rigid-body physics can't be predicted like player movement.
+- One wheel size, one seat, no engines or fuel; every vehicle accelerates alike.
+- No crash damage; pieces don't break off. Vehicles don't damage buildings.
+- Vehicles only drive on colliders (fine for voxel terrain with colliders). The demo buggy gets
+  through the whole test track upright (at most ~11° of roll on the side ridges).

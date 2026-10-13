@@ -3,7 +3,8 @@
     "rootNamespace": "ShooterMashup.EditorTools",
     "references": [
         "ShooterMashup.Player",
-        "ShooterMashup.Building"
+        "ShooterMashup.Building",
+        "ShooterMashup.Vehicles"
     ],
     "includePlatforms": [
         "Editor"

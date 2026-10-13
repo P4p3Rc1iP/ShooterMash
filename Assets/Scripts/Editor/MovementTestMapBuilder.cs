@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ShooterMashup.Building;
 using ShooterMashup.Player;
+using ShooterMashup.Vehicles;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -66,6 +67,7 @@ namespace ShooterMashup.EditorTools
             BuildLeanCorner(new Vector3(-33, 0, -8));
             BuildSlickFloor(new Vector3(28, 0, -5));
             BuildStrafeLane(-38);
+            BuildVehicleTrack(new Vector3(58f, 0f, -56f), -90f);
             BuildBuildingArea(new Vector3(56, 0, 8));
 
             // Spawn in front of the building showcase, facing it (+z).
@@ -275,6 +277,78 @@ namespace ShooterMashup.EditorTools
             Label("strafe-jump lane\nmarkers every 5 m", new Vector3(0, 5.6f, z + 0.8f), parent, 180);
         }
 
+        /// <summary>
+        /// A rough track for vehicles, 10 m wide, starting at `at` and running towards `yaw`
+        /// (0 = +z): washboard, ridges that lift one side at a time, two dunes, a jump with a
+        /// landing ramp, and a field of rocks. Built in the track's own space (forward is +z).
+        /// </summary>
+        static void BuildVehicleTrack(Vector3 at, float yaw)
+        {
+            var parent = Group("Vehicle track");
+            parent.SetLocalPositionAndRotation(at, Quaternion.Euler(0f, yaw, 0f));
+            const float width = 10f;
+            float z = 0f;
+            Label("vehicle test track\nwashboard, ridges, dunes, jump, rocks", new Vector3(0f, 3f, -1f), parent);
+
+            // Washboard: low ridges every metre (boxes turned 45°: 21 cm tall).
+            for (int i = 0; i < 10; i++)
+                Box($"Washboard {i}", new Vector3(0f, 0f, z + 1f + i), new Vector3(width, 0.3f, 0.3f), i % 2 == 0 ? matTrim : matWall,
+                    parent, Quaternion.Euler(45f, 0f, 0f));
+            z += 16f;
+
+            // Ridges under one side at a time, so the body rolls left and right.
+            for (int i = 0; i < 6; i++)
+            {
+                float side = i % 2 == 0 ? -1f : 1f;
+                Box($"Side ridge {i}", new Vector3(side * width / 4f, 0f, z + i * 2f), new Vector3(width / 2f, 0.5f, 0.5f),
+                    i % 2 == 0 ? matWall : matTrim, parent, Quaternion.Euler(45f, 0f, 0f));
+            }
+            z += 18f;
+
+            // Two dunes: 1 m tall humps, 8° up and down.
+            const float thick = 0.3f;
+            for (int d = 0; d < 2; d++)
+            {
+                z = Slope(parent, "Dune up", z, 8f, 1f, width, thick, matWall);
+                z = Slope(parent, "Dune down", z, -8f, 1f, width, thick, matTrim);
+                z += 4f;
+            }
+            z += 4f;
+
+            // A jump: 15° up to 1.2 m, a 6 m gap, and a landing ramp down.
+            z = Slope(parent, "Jump ramp", z, 15f, 1.2f, width / 2f, thick, matTarget);
+            z += 6f;
+            z = Slope(parent, "Landing ramp", z, -15f, 1.2f, width / 2f, thick, matWall);
+            z += 6f;
+
+            // Rocks: tilted boxes of different sizes, half buried. Seeded, so the map is the same every build.
+            var random = new System.Random(7);
+            float F(float min, float max) => min + (float)random.NextDouble() * (max - min);
+            for (int i = 0; i < 30; i++)
+            {
+                var size = new Vector3(F(0.6f, 1.6f), F(0.3f, 0.8f), F(0.6f, 1.6f));
+                var center = new Vector3(F(-width / 2f, width / 2f), F(-0.15f, 0.1f), z + F(0f, 14f));
+                Box($"Rock {i}", center, size, matTrim, parent, Quaternion.Euler(F(-20f, 20f), F(0f, 90f), F(-20f, 20f)));
+            }
+        }
+
+        /// <summary>
+        /// A ramp from `z` along +z, rising (positive angle) to `height` or falling from it to the
+        /// ground (negative). Its top surface starts or ends at ground level. Returns where it ends.
+        /// </summary>
+        static float Slope(Transform parent, string name, float z, float angle, float height, float width, float thick, Material mat)
+        {
+            float a = Mathf.Abs(angle) * Mathf.Deg2Rad;
+            float run = height / Mathf.Tan(a);
+            float length = height / Mathf.Sin(a);
+            // Euler x tips +z down for positive angles, so a rising ramp needs a negative one.
+            Quaternion tilt = Quaternion.Euler(angle > 0f ? -Mathf.Abs(angle) : Mathf.Abs(angle), 0f, 0f);
+            Vector3 surfaceMid = new Vector3(0f, height / 2f, z + run / 2f);
+            Box(name, surfaceMid - tilt * Vector3.up * (thick / 2f), new Vector3(width, thick, length), mat, parent, tilt);
+            return z + run;
+        }
+
+
         static void BuildBuildingArea(Vector3 at)
         {
             var parent = Group("Building area");
@@ -292,6 +366,12 @@ namespace ShooterMashup.EditorTools
             Label("farmstead\n45° roofs", BuildShowcase.DefaultFarm + new Vector3(4.5f, 9f, -4f), parent);
             Label("barn\n27° roofs", BuildShowcase.DefaultBarn + new Vector3(4.5f, 8.5f, -4f), parent);
             Label("watchtower\n63° roof",BuildShowcase.DefaultTower + new Vector3(1.5f, 16.5f, -1f), parent);
+
+            // A demo buggy to drive (F on its seat), and how vehicles are built.
+            var buggy = new GameObject("Vehicle showcase").AddComponent<VehicleShowcase>();
+            buggy.buggyPosition = new Vector3(63f, 0f, 13f);
+            buggy.buggyYaw = 180f; // facing the open ground to the south
+            Label("buggy: F on the seat to drive\nL lift tool, B to build on a lift", new Vector3(63f, 3f, 10.5f), parent);
 
             // Diggable ground: a 1 m thick pad of blocks standing in for voxel terrain.
             Vector3 pad = new Vector3(at.x - 4f, 0f, at.z - 16f); // corner
@@ -330,6 +410,8 @@ namespace ShooterMashup.EditorTools
             player.AddComponent<PlayerVitals>();
             player.AddComponent<PlayerDebugHud>();
             player.AddComponent<BuildTool>();
+            player.AddComponent<LiftTool>();
+            player.AddComponent<VehicleDriver>();
 
             var camGo = new GameObject("PlayerCamera");
             camGo.tag = "MainCamera";

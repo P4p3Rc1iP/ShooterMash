@@ -1,16 +1,15 @@
 using System.Collections.Generic;
-using ShooterMashup.Player;
 using UnityEngine;
 
 namespace ShooterMashup.Building
 {
     /// <summary>
-    /// Owns the build simulation for the scene (the server's job, once there is one) and keeps a
-    /// GameObject with colliders for every placed piece. Also colours pieces: by material
-    /// normally, by support while someone holds the build tool, and flashing for a remove preview.
+    /// Owns the world's build simulation (the server's job, once there is one) and its piece
+    /// GameObjects (PieceViews). Also holds the look shared by every host: materials, textures
+    /// and the ghost material, and builds the GameObject for a piece shape.
     /// </summary>
     [DefaultExecutionOrder(-50)]
-    public class StructureManager : MonoBehaviour
+    public class StructureManager : BuildHost
     {
         public BuildConfig config = new BuildConfig();
 
@@ -25,9 +24,14 @@ namespace ShooterMashup.Building
             new Color(0.48f, 0.58f, 0.72f), // iron
         };
 
-        static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
+        [Tooltip("Colour of tyres.")]
+        public Color tyreColor = new Color(0.12f, 0.12f, 0.13f);
 
-        public BuildSystem System { get; private set; }
+        BuildSystem system;
+        PieceViews views;
+
+        public override BuildSystem System => system;
+        public override PieceViews Views => views;
         public UnityBuildWorld World { get; private set; }
         public Material GhostMaterial { get; private set; }
 
@@ -35,35 +39,19 @@ namespace ShooterMashup.Building
         public Texture TextureFor(BuildMaterial m) => textures[(int)m];
         public Color ColorFor(BuildMaterial m) => materialColors[(int)m];
 
-        /// <summary>Colour pieces by how well supported they are (Valheim's hammer view).</summary>
+        /// <summary>Colour the world's pieces by how well supported they are (Valheim's hammer view).</summary>
         public bool ShowSupport
         {
-            get => showSupport;
-            set
-            {
-                if (showSupport == value) return;
-                showSupport = value;
-                RefreshColors();
-            }
+            get => views.ShowSupport;
+            set => views.ShowSupport = value;
         }
 
-        sealed class View
-        {
-            public GameObject go;
-            public Renderer[] renderers;
-        }
-
-        readonly Dictionary<int, View> views = new Dictionary<int, View>();
-        readonly HashSet<int> doomed = new HashSet<int>();
-        MaterialPropertyBlock block;
         Material[] pieceMaterials;
         Texture2D[] textures;
-        bool showSupport;
-        int previewTarget = -1;
+        Material tyreMaterial;
 
         void Awake()
         {
-            block = new MaterialPropertyBlock();
             int count = global::System.Enum.GetValues(typeof(BuildMaterial)).Length;
             textures = new Texture2D[count];
             pieceMaterials = new Material[count];
@@ -73,34 +61,33 @@ namespace ShooterMashup.Building
                 pieceMaterials[i] = BuildMeshes.Lit((BuildMaterial)i + " piece", textures[i]);
             }
             GhostMaterial = BuildMeshes.Transparent("Build ghost");
+            tyreMaterial = BuildMeshes.Lit("Tyre", null);
+            tyreMaterial.SetColor("_BaseColor", tyreColor);
 
             World = new UnityBuildWorld(solidMask);
-            System = new BuildSystem(config, World);
-            System.Changed += OnChanged;
+            system = new BuildSystem(config, World);
+            views = new PieceViews(system, transform, this);
         }
 
         void OnDestroy()
         {
-            if (System != null) System.Changed -= OnChanged;
+            views?.Dispose();
             if (pieceMaterials != null)
                 foreach (Material m in pieceMaterials) Destroy(m);
             if (textures != null)
                 foreach (Texture2D t in textures) Destroy(t);
             Destroy(GhostMaterial);
+            Destroy(tyreMaterial);
         }
 
         void OnValidate()
         {
             // Material values edited in play mode: re-solve so the change shows straight away.
-            if (Application.isPlaying && System != null)
-                System.RecomputeAll();
+            if (Application.isPlaying && system != null)
+                system.RecomputeAll();
         }
 
-        void LateUpdate()
-        {
-            if (previewTarget >= 0)
-                RefreshColors(); // the preview pulses
-        }
+        void LateUpdate() => views.Tick();
 
         // ------------------------------------------------------------------ actions
 
@@ -112,30 +99,18 @@ namespace ShooterMashup.Building
             if (col != null) col.enabled = false; // leaves the physics scene now, not at end of frame
             dig.gameObject.SetActive(false);
             Destroy(dig.gameObject);
-            return System.TerrainChanged(bounds);
+            return system.TerrainChanged(bounds);
         }
 
-        public void SetRemovePreview(int target, List<int> wouldCollapse)
-        {
-            previewTarget = target;
-            doomed.Clear();
-            foreach (int id in wouldCollapse)
-                doomed.Add(id);
-            RefreshColors();
-        }
-
-        public void ClearRemovePreview()
-        {
-            if (previewTarget < 0)
-                return;
-            previewTarget = -1;
-            doomed.Clear();
-            RefreshColors();
-        }
+        public void SetRemovePreview(int target, List<int> wouldCollapse) => views.SetRemovePreview(target, wouldCollapse);
+        public void ClearRemovePreview() => views.ClearRemovePreview();
 
         // ------------------------------------------------------------------ views
 
-        /// <summary>Builds the GameObject for a piece shape: one child per box.</summary>
+        /// <summary>
+        /// Builds the GameObject for a piece shape: one child per box, plus a tyre for a wheel
+        /// (drawn only, no collider; a vehicle moves it with the suspension).
+        /// </summary>
         public GameObject CreatePieceObject(PieceDef def, Material material, bool colliders, string name, Transform parent = null)
         {
             var root = new GameObject(name);
@@ -161,77 +136,19 @@ namespace ShooterMashup.Building
                     child.AddComponent<BoxCollider>().size = box.Size;
                 }
             }
+            if (def.Wheel != null)
+            {
+                var tyre = new GameObject(WheelVisualName);
+                tyre.transform.SetParent(root.transform, false);
+                tyre.transform.localPosition = def.Wheel.center;
+                tyre.AddComponent<MeshFilter>().sharedMesh = BuildMeshes.Wheel(def.Wheel.radius, def.Wheel.width);
+                // The ghost keeps its see-through material; placed wheels get rubber.
+                tyre.AddComponent<MeshRenderer>().sharedMaterial = colliders ? tyreMaterial : material;
+            }
             return root;
         }
 
-        void OnChanged(BuildResult result)
-        {
-            foreach (int id in result.removed) DestroyView(id);
-            foreach (int id in result.collapsed) DestroyView(id);
-            foreach (int id in result.added) CreateView(id);
-
-            if (previewTarget >= 0 && !views.ContainsKey(previewTarget))
-                ClearRemovePreview();
-            RefreshColors();
-        }
-
-        void CreateView(int id)
-        {
-            Piece p = System.Get(id);
-            if (p == null || views.ContainsKey(id))
-                return;
-            GameObject go = CreatePieceObject(p.def, MaterialFor(p.record.material), true, $"{p.record.material} {p.def.name} #{id}", transform);
-            go.transform.SetPositionAndRotation(p.record.position, p.record.rotation);
-            go.AddComponent<BuildPieceTag>().id = id;
-            if (p.def.Surface != 0)
-                go.AddComponent<PmSurface>().flags = p.def.Surface; // e.g. ladders
-            views[id] = new View { go = go, renderers = go.GetComponentsInChildren<Renderer>() };
-        }
-
-        void DestroyView(int id)
-        {
-            if (!views.TryGetValue(id, out View v))
-                return;
-            // Vanish for now. Falling debris goes here later (cosmetic only, never networked).
-            Destroy(v.go);
-            views.Remove(id);
-        }
-
-        void RefreshColors()
-        {
-            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 12f);
-            foreach (KeyValuePair<int, View> kv in views)
-            {
-                Piece p = System.Get(kv.Key);
-                if (p == null)
-                    continue;
-
-                Color c;
-                if (kv.Key == previewTarget)
-                    c = Color.Lerp(new Color(1f, 1f, 1f), new Color(1f, 0.4f, 0.9f), pulse);
-                else if (doomed.Contains(kv.Key))
-                    c = Color.Lerp(new Color(0.55f, 0f, 0.35f), new Color(1f, 0.2f, 0.6f), pulse);
-                else if (showSupport)
-                    c = SupportColor(p, System.StatsOf(p));
-                else
-                    c = ColorFor(p.record.material);
-
-                block.SetColor(BaseColor, c);
-                foreach (Renderer r in kv.Value.renderers)
-                    r.SetPropertyBlock(block);
-            }
-        }
-
-        /// <summary>Blue when grounded, then green to yellow to red as support runs out.</summary>
-        public static Color SupportColor(Piece p, MaterialStats stats)
-        {
-            if (p.grounded)
-                return new Color(0.25f, 0.5f, 1f);
-            float f = Mathf.InverseLerp(stats.minSupport, stats.maxSupport, p.support);
-            var red = new Color(0.9f, 0.15f, 0.1f);
-            var yellow = new Color(1f, 0.85f, 0.1f);
-            var green = new Color(0.2f, 0.85f, 0.25f);
-            return f < 0.5f ? Color.Lerp(red, yellow, f * 2f) : Color.Lerp(yellow, green, (f - 0.5f) * 2f);
-        }
+        /// <summary>The name of a wheel piece's tyre object, which vehicles look up to move it.</summary>
+        public const string WheelVisualName = "Tyre";
     }
 }

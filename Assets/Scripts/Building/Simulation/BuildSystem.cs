@@ -98,6 +98,8 @@ namespace ShooterMashup.Building
                 return new PlacementCheck { failure = BuildFailure.UnknownPiece };
             if (!def.ComesIn(material))
                 return new PlacementCheck { failure = BuildFailure.WrongMaterial };
+            if (def.VehicleOnly && !cfg.vehicleParts)
+                return new PlacementCheck { failure = BuildFailure.VehicleOnly };
             Piece p = Create(new PieceRecord { id = 0, type = type, material = material, position = position, rotation = rotation });
             return Check(p);
         }
@@ -165,6 +167,8 @@ namespace ShooterMashup.Building
                 return BuildResult.Fail(BuildFailure.UnknownPiece);
             if (!placing.ComesIn(cmd.material))
                 return BuildResult.Fail(BuildFailure.WrongMaterial);
+            if (placing.VehicleOnly && !cfg.vehicleParts)
+                return BuildResult.Fail(BuildFailure.VehicleOnly);
 
             Piece p = Create(new PieceRecord
             {

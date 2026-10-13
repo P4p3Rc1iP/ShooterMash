@@ -31,11 +31,15 @@ namespace ShooterMashup.Building
                 Vector3 half = box.halfExtents + Vector3.one * tolerance;
                 int n = Physics.OverlapBoxNonAlloc(box.center, half, overlaps, box.rotation, solidMask, QueryTriggerInteraction.Ignore);
                 for (int i = 0; i < n; i++)
-                    if (overlaps[i].GetComponentInParent<BuildPieceTag>() == null)
+                    if (IsGround(overlaps[i]))
                         return true;
             }
             return false;
         }
+
+        /// <summary>Terrain and static map geometry: not a piece, and not part of a vehicle or a lift.</summary>
+        static bool IsGround(Collider c) =>
+            c.GetComponentInParent<BuildPieceTag>() == null && c.GetComponentInParent<BuildHost>() == null;
 
         public bool IsBlocked(Obb[] boxes)
         {

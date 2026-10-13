@@ -20,6 +20,12 @@ namespace ShooterMashup.Building
         public BuildMaterial[] Materials { get; private set; } = Array.Empty<BuildMaterial>();
         /// <summary>How the player moves on it, e.g. a ladder (set on the piece's colliders via PmSurface).</summary>
         public SurfaceFlags Surface { get; private set; }
+        /// <summary>A wheel with suspension (vehicles only), or null.</summary>
+        public WheelSpec Wheel { get; private set; }
+        /// <summary>A seat you can drive from (vehicles only), or null.</summary>
+        public SeatSpec Seat { get; private set; }
+        /// <summary>Only buildable on a vehicle: the world refuses it.</summary>
+        public bool VehicleOnly => Wheel != null || Seat != null;
 
         public PieceDef(string name, Obb[] boxes, Vector3[] snapPoints)
         {
@@ -29,6 +35,18 @@ namespace ShooterMashup.Building
         }
 
         public bool ComesIn(BuildMaterial material) => Array.IndexOf(Materials, material) >= 0;
+
+        internal PieceDef WithWheel(WheelSpec wheel)
+        {
+            Wheel = wheel;
+            return this;
+        }
+
+        internal PieceDef WithSeat(SeatSpec seat)
+        {
+            Seat = seat;
+            return this;
+        }
 
         internal PieceDef In(params BuildMaterial[] materials)
         {
@@ -41,6 +59,34 @@ namespace ShooterMashup.Building
             Surface = surface;
             return this;
         }
+    }
+
+    /// <summary>
+    /// A wheel with built-in suspension, in piece space. It's drawn but has no collider: the
+    /// vehicle casts a ray for it and handles springs and grip in code (Trailmakers style).
+    /// </summary>
+    public sealed class WheelSpec
+    {
+        public readonly Vector3 center;   // where the wheel sits at its normal ride height
+        public readonly float radius;
+        public readonly float width;      // along the axle, which is the piece's x axis
+        public readonly float mass;       // kg
+
+        public WheelSpec(Vector3 center, float radius, float width, float mass)
+        {
+            this.center = center;
+            this.radius = radius;
+            this.width = width;
+            this.mass = mass;
+        }
+    }
+
+    /// <summary>A seat, in piece space. It faces +z, which becomes the vehicle's forward.</summary>
+    public sealed class SeatSpec
+    {
+        public readonly Vector3 eye;      // the driver's eye, for the first-person camera
+
+        public SeatSpec(Vector3 eye) => this.eye = eye;
     }
 
     /// <summary>
@@ -126,6 +172,9 @@ namespace ShooterMashup.Building
             foreach (float rise in Sizes)
             foreach (float width in Sizes)
                 all.Add(Stairs($"Stairs {N(rise)} m up, {N(width)} m wide", width, 2f * rise, rise).In(wood, stone));
+            // Vehicle parts, only buildable on vehicles.
+            all.Add(WheelPiece("Wheel").In(wood, iron));
+            all.Add(DriverSeat("Driver seat").In(wood));
             return all.ToArray();
         }
 
@@ -344,6 +393,37 @@ namespace ShooterMashup.Building
             var snaps = new List<Vector3>(Line(new Vector3(-w, 0, -r), new Vector3(w, 0, -r)));
             snaps.AddRange(Line(new Vector3(-w, rise, r), new Vector3(w, rise, r)));
             return new PieceDef(name, boxes, snaps.ToArray());
+        }
+
+        /// <summary>
+        /// A 1 m wheel on a short mount, with its axle along x. Its one snap point is where it
+        /// attaches: on a beam's centre line, so the mount sits against the side of a beam running
+        /// along z, or just past the end of one running along x (an axle). The wheel is on the
+        /// +x side; turn it 180° for the other side of a vehicle.
+        /// </summary>
+        static PieceDef WheelPiece(string name)
+        {
+            const float radius = 0.5f, width = 0.4f, mount = 0.2f, gap = 0.03f;
+            float inner = Beam / 2f;
+            var mountBox = new Obb(new Vector3(inner + mount / 2f, 0, 0), new Vector3(mount, mount, mount));
+            var wheel = new WheelSpec(new Vector3(inner + mount + gap + width / 2f, 0, 0), radius, width, 40f);
+            return new PieceDef(name, new[] { mountBox }, new[] { Vector3.zero }).WithWheel(wheel);
+        }
+
+        /// <summary>
+        /// A placeholder driver's seat facing +z. It snaps by a point half a beam below its
+        /// bottom, so snapped to a beam's centre line it sits on top of the beam.
+        /// </summary>
+        static PieceDef DriverSeat(string name)
+        {
+            const float width = 0.6f, height = 0.4f, depth = 0.6f, back = 0.1f, backHeight = 0.6f;
+            Obb[] boxes =
+            {
+                new Obb(new Vector3(0, height / 2f, 0), new Vector3(width, height, depth)),
+                new Obb(new Vector3(0, height + backHeight / 2f, -depth / 2f + back / 2f), new Vector3(width, backHeight, back)),
+            };
+            return new PieceDef(name, boxes, new[] { new Vector3(0, -Beam / 2f, 0) })
+                .WithSeat(new SeatSpec(new Vector3(0, height + 0.75f, -0.05f)));
         }
 
         /// <summary>Points every grid step from a to b, both ends included.</summary>

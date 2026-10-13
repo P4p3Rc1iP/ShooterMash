@@ -79,7 +79,9 @@ namespace ShooterMashup.Building
         float messageTime = -10f;
         GUIStyle style, bigStyle, buttonStyle, selectedStyle;
 
-        BuildSystem Sim => structures.System;
+        BuildHost host;        // what you aim at: the world, a vehicle or a lift
+        BuildHost undoHost;    // where your last action was, for Ctrl+Z
+        BuildHost removeHost;  // the host of removeTarget
         PieceDef Selected => PieceCatalog.All[selected];
         bool RotationSnapped => rotationMode < rotationSteps.Length;
         float RotationStep => RotationSnapped ? rotationSteps[rotationMode] : freeRotationStep;
@@ -133,6 +135,7 @@ namespace ShooterMashup.Building
             bool shift = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
             bool hit = Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit aim, reach,
                 structures.solidMask, QueryTriggerInteraction.Ignore);
+            host = HostAt(hit, aim);
 
             if (locked && mouse.middleButton.wasPressedThisFrame)
             {
@@ -166,9 +169,8 @@ namespace ShooterMashup.Building
                 {
                     if (locked) CommitRemove();
                     removing = false;
-                    removeTarget = -1;
+                    ClearRemovePreview();
                     digTarget = null;
-                    structures.ClearRemovePreview();
                 }
                 UpdateGhost(hit, aim, shift);
 
@@ -215,13 +217,25 @@ namespace ShooterMashup.Building
                 Say("snap point: auto");
             }
 
+            // Undo and redo act where you last built: the world, or a vehicle.
             bool ctrl = kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed;
             bool shift = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
+            BuildHost h = undoHost != null && undoHost.System != null ? undoHost : structures;
             if (ctrl && kb.zKey.wasPressedThisFrame)
-                Report(Sim.Execute(shift ? BuildCmd.Redo(ownerId, Time.timeAsDouble) : BuildCmd.Undo(ownerId, Time.timeAsDouble)), shift ? "redone" : "undone");
+                Report(h.Execute(shift ? BuildCmd.Redo(ownerId, Time.timeAsDouble) : BuildCmd.Undo(ownerId, Time.timeAsDouble)), shift ? "redone" : "undone");
             else if (ctrl && kb.yKey.wasPressedThisFrame)
-                Report(Sim.Execute(BuildCmd.Redo(ownerId, Time.timeAsDouble)), "redone");
+                Report(h.Execute(BuildCmd.Redo(ownerId, Time.timeAsDouble)), "redone");
         }
+
+        /// <summary>The host of whatever the aim hit: a vehicle or lift it belongs to, else the world.</summary>
+        BuildHost HostAt(bool hit, RaycastHit aim)
+        {
+            BuildHost h = hit ? aim.collider.GetComponentInParent<BuildHost>() : null;
+            return h != null ? h : structures;
+        }
+
+        /// <summary>Put the tool away (e.g. another tool was taken out, or the player sat down).</summary>
+        public void Unequip() => SetEquipped(false);
 
         void SetEquipped(bool on)
         {
@@ -230,16 +244,13 @@ namespace ShooterMashup.Building
             Equipped = on;
             if (input != null) input.leanEnabled = !on;
             if (structures != null)
-            {
                 structures.ShowSupport = on;
-                structures.ClearRemovePreview();
-            }
+            ClearRemovePreview();
             if (!on)
             {
                 if (menuOpen) CloseMenu();
                 HideGhost();
                 removing = false;
-                removeTarget = -1;
             }
         }
 
@@ -271,7 +282,7 @@ namespace ShooterMashup.Building
         void PickAimedPiece(bool hit, RaycastHit aim)
         {
             BuildPieceTag tag = hit ? aim.collider.GetComponentInParent<BuildPieceTag>() : null;
-            Piece p = tag != null ? Sim.Get(tag.id) : null;
+            Piece p = tag != null && host.System != null ? host.System.Get(tag.id) : null;
             if (p == null)
             {
                 Say("aim at a piece to copy it");
@@ -312,15 +323,21 @@ namespace ShooterMashup.Building
                 return;
             }
 
+            // Everything below is in the host's space: the world, or a vehicle's body. Rotation is
+            // the host's too, so a vehicle's pieces turn with it.
             PieceDef def = Selected;
+            Transform frame = host.Frame;
+            Vector3 aimPoint = frame.InverseTransformPoint(aim.point);
+            Vector3 aimNormal = frame.InverseTransformDirection(aim.normal);
             Quaternion userRotation = Quaternion.Euler(0f, yaw, 0f);
-            placePosition = aim.point;
+            placePosition = aimPoint;
             placeRotation = userRotation;
             snap = default;
             if (!free)
             {
-                snap = BuildSnapping.Snap(Sim, def, aim.point, aim.normal, userRotation, heldSnap, snapRadius,
-                    heldSnap >= 0 ? manualOverlapLimit : autoOverlapLimit);
+                if (host.System != null)
+                    snap = BuildSnapping.Snap(host.System, def, aimPoint, aimNormal, userRotation, heldSnap, snapRadius,
+                        heldSnap >= 0 ? manualOverlapLimit : autoOverlapLimit);
                 if (snap.snapped)
                 {
                     placePosition = snap.position;
@@ -329,15 +346,15 @@ namespace ShooterMashup.Building
                 else if (heldSnap >= 0)
                 {
                     // Nothing in reach: the chosen snap point follows the aim, like it will when it snaps.
-                    placePosition = aim.point - userRotation * def.snapPoints[heldSnap];
+                    placePosition = aimPoint - userRotation * def.snapPoints[heldSnap];
                 }
             }
-            check = Sim.CheckPlace(selected, material, placePosition, placeRotation);
+            check = host.CheckPlace(selected, material, placePosition, placeRotation);
             hasPlacement = true;
 
             EnsureGhost();
             ghost.SetActive(true);
-            ghost.transform.SetPositionAndRotation(placePosition, placeRotation);
+            ghost.transform.SetPositionAndRotation(frame.TransformPoint(placePosition), frame.rotation * placeRotation);
             // The material's look, leaning green when it can go there and red when it can't.
             Color tint = Color.Lerp(structures.ColorFor(material), check.Valid ? new Color(0.3f, 1f, 0.4f) : new Color(1f, 0.2f, 0.15f),
                 check.Valid ? 0.35f : 0.7f);
@@ -350,7 +367,7 @@ namespace ShooterMashup.Building
                 : (Vector3?)null;
             marker.SetActive(point.HasValue);
             if (point.HasValue)
-                marker.transform.position = point.Value;
+                marker.transform.position = frame.TransformPoint(point.Value);
         }
 
         void Place()
@@ -362,9 +379,11 @@ namespace ShooterMashup.Building
                 Say("can't place: " + Describe(check.failure));
                 return;
             }
-            BuildResult result = Sim.Execute(BuildCmd.Place(ownerId, selected, material, placePosition, placeRotation, Time.timeAsDouble));
+            BuildResult result = host.Execute(BuildCmd.Place(ownerId, selected, material, placePosition, placeRotation, Time.timeAsDouble));
             if (!result.Ok)
                 Say("can't place: " + Describe(result.failure));
+            else
+                undoHost = host is IRedirectingHost r ? r.Target : host;
         }
 
         void EnsureGhost()
@@ -414,27 +433,35 @@ namespace ShooterMashup.Building
             BuildPieceTag piece = hit ? aim.collider.GetComponentInParent<BuildPieceTag>() : null;
             digTarget = hit && piece == null ? aim.collider.GetComponentInParent<DiggableBlock>() : null;
 
-            int id = piece != null ? piece.id : -1;
-            if (id == removeTarget)
+            int id = piece != null && host.System != null ? piece.id : -1;
+            if (id == removeTarget && host == removeHost)
                 return;
+            ClearRemovePreview();
             removeTarget = id;
-            if (id >= 0)
+            removeHost = host;
+            if (id >= 0 && host.CanBuild == BuildFailure.None)
             {
-                Sim.PreviewRemove(id, wouldCollapse);
-                structures.SetRemovePreview(id, wouldCollapse);
+                host.System.PreviewRemove(id, wouldCollapse);
+                host.Views?.SetRemovePreview(id, wouldCollapse);
             }
-            else
-            {
-                wouldCollapse.Clear();
-                structures.ClearRemovePreview();
-            }
+        }
+
+        void ClearRemovePreview()
+        {
+            if (removeHost != null)
+                removeHost.Views?.ClearRemovePreview();
+            removeHost = null;
+            removeTarget = -1;
+            wouldCollapse.Clear();
         }
 
         void CommitRemove()
         {
-            if (removeTarget >= 0)
+            if (removeTarget >= 0 && removeHost != null)
             {
-                BuildResult result = Sim.Execute(BuildCmd.Remove(ownerId, removeTarget, Time.timeAsDouble));
+                BuildResult result = removeHost.Execute(BuildCmd.Remove(ownerId, removeTarget, Time.timeAsDouble));
+                if (result.Ok)
+                    undoHost = removeHost is IRedirectingHost r ? r.Target : removeHost;
                 Report(result, "removed");
             }
             else if (digTarget != null)
@@ -473,6 +500,8 @@ namespace ShooterMashup.Building
             BuildFailure.UndoExpired => "too long ago to undo",
             BuildFailure.StructureChanged => "can't undo: the structure has changed since",
             BuildFailure.Disabled => "undo is turned off",
+            BuildFailure.VehicleOnly => "that only goes on a vehicle (build one on a lift: L)",
+            BuildFailure.NotOnLift => "put the vehicle on a lift to build on it (L)",
             _ => failure.ToString(),
         };
 
@@ -505,7 +534,7 @@ namespace ShooterMashup.Building
             string status;
             if (removing)
             {
-                Piece p = removeTarget >= 0 ? Sim.Get(removeTarget) : null;
+                Piece p = removeTarget >= 0 && removeHost != null ? removeHost.System?.Get(removeTarget) : null;
                 status = p != null ? $"release to remove {p.record.material} {p.def.name}" +
                                      (wouldCollapse.Count > 0 ? $"  <color=#f6a>({wouldCollapse.Count} more would collapse)</color>" : "")
                     : digTarget != null ? "release to dig"
@@ -517,7 +546,7 @@ namespace ShooterMashup.Building
                 status = $"<color=#f66>{Describe(check.failure)}</color>";
             else
             {
-                MaterialStats stats = Sim.Config.Stats(material);
+                MaterialStats stats = (host != null && host.System != null ? host.System : structures.System).Config.Stats(material);
                 status = check.grounded ? "grounded" : $"support {Mathf.Max(0f, check.support):0} / {stats.maxSupport:0}";
             }
 
