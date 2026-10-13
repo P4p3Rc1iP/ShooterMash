@@ -69,6 +69,8 @@ namespace ShooterMashup.Vehicles
         public float Speed => body.linearVelocity.magnitude;
         public float ForwardSpeed => Vector3.Dot(body.linearVelocity, transform.TransformDirection(forward));
         public float Mass => body.mass;
+        /// <summary>How fast it can drive forwards (m/s): the average of its wheels' top speeds.</summary>
+        public float TopSpeed { get; private set; } = 26f;
 
         /// <summary>A new, empty vehicle at a frame (a lift's top), frozen until released.</summary>
         public static Vehicle Create(StructureManager look, Transform at)
@@ -190,7 +192,7 @@ namespace ShooterMashup.Vehicles
             }
             foreach (Wheel w in wheels)
             {
-                Vector3 droop = w.anchor - Vector3.up * (tuning.travel * tuning.rideHeight);
+                Vector3 droop = w.anchor - Vector3.up * (w.spec.travel * tuning.rideHeight);
                 b.Encapsulate(droop - Vector3.up * w.spec.radius);
                 b.Encapsulate(droop + Vector3.up * w.spec.radius);
             }
@@ -335,6 +337,13 @@ namespace ShooterMashup.Vehicles
         /// <summary>Which way each wheel rolls, how much it drives, and how much it steers.</summary>
         void SetupWheels()
         {
+            TopSpeed = 26f;
+            if (wheels.Count > 0)
+            {
+                float sum = 0f;
+                foreach (Wheel w in wheels) sum += w.spec.topSpeed;
+                TopSpeed = sum / wheels.Count;
+            }
             float minAlong = float.MaxValue, maxAlong = float.MinValue;
             foreach (Wheel w in wheels)
             {
@@ -395,18 +404,20 @@ namespace ShooterMashup.Vehicles
             float speed = Vector3.Dot(body.linearVelocity, fwdWorld);
             float share = body.mass / n;
             float gravity = -Physics.gravity.y + t.extraGravity;
-            float k = share * gravity / (t.travel * t.rideHeight);
-            float c = 2f * t.damping * Mathf.Sqrt(k * share);
-            float maxSteer = Mathf.Lerp(t.maxSteer, t.steerAtTopSpeed, Mathf.Abs(speed) / t.topSpeed);
+            float maxSteer = Mathf.Lerp(t.maxSteer, t.steerAtTopSpeed, Mathf.Abs(speed) / TopSpeed);
             Vector3 com = body.worldCenterOfMass;
             Vector3 normalSum = Vector3.zero;
 
             foreach (Wheel w in wheels)
             {
                 Vector3 anchor = transform.TransformPoint(w.anchor);
-                float top = t.travel * (1f - t.rideHeight);           // full bump above the anchor
+                float travel = w.spec.travel;
+                // Springs sized so the wheel carries its share of the weight at ride height.
+                float k = share * gravity / (travel * t.rideHeight);
+                float c = 2f * t.damping * Mathf.Sqrt(k * share);
+                float top = travel * (1f - t.rideHeight);              // full bump above the anchor
                 Vector3 origin = anchor + up * top;
-                float length = t.travel + w.spec.radius;
+                float length = travel + w.spec.radius;
                 w.steerAngle = w.steerFactor * steer * maxSteer;
 
                 if (!CastWheel(origin, -up, length, out RaycastHit hit))
@@ -420,13 +431,13 @@ namespace ShooterMashup.Vehicles
                 normalSum += hit.normal;
 
                 // Spring and damper along the suspension.
-                float raw = (length - hit.distance) / t.travel;
+                float raw = (length - hit.distance) / travel;
                 float compression = Mathf.Clamp01(raw);
-                float velocity = (compression - w.compression) * t.travel / dt;
+                float velocity = (compression - w.compression) * travel / dt;
                 w.compression = compression;
-                float load = Mathf.Max(0f, k * compression * t.travel + c * velocity);
+                float load = Mathf.Max(0f, k * compression * travel + c * velocity);
                 if (raw > 1f)
-                    load += k * (raw - 1f) * t.travel * 4f;            // bump stop
+                    load += k * (raw - 1f) * travel * 4f;              // bump stop
                 body.AddForceAtPosition(up * load, hit.point);
 
                 // Grip: the tyre's rolling and sideways directions on the ground.
@@ -460,10 +471,10 @@ namespace ShooterMashup.Vehicles
                 else
                 {
                     // Full push until near top speed, then it fades out.
-                    float limit = throttleNow > 0f ? t.topSpeed : t.reverseSpeed;
+                    float limit = throttleNow > 0f ? TopSpeed : t.reverseSpeed;
                     float fraction = Mathf.Abs(speed) / limit;
                     float taper = Mathf.Clamp01(1f - fraction * fraction);
-                    longitudinal = throttleNow * t.acceleration * share * taper * w.driveFactor;
+                    longitudinal = throttleNow * t.acceleration * w.spec.power * share * taper * w.driveFactor;
                 }
 
                 // Friction circle: the tyre can't push harder than its load allows.
@@ -518,7 +529,7 @@ namespace ShooterMashup.Vehicles
             {
                 if (w.tyre == null)
                     continue;
-                Vector3 center = w.anchor + Vector3.up * (tuning.travel * (w.compression - tuning.rideHeight));
+                Vector3 center = w.anchor + Vector3.up * (w.spec.travel * (w.compression - tuning.rideHeight));
                 w.tyre.SetPositionAndRotation(transform.TransformPoint(center),
                     transform.rotation * Quaternion.AngleAxis(w.steerAngle, Vector3.up) * w.rotation * Quaternion.AngleAxis(w.spin, Vector3.right));
             }

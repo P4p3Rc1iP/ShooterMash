@@ -18,13 +18,19 @@ namespace ShooterMashup.Vehicles
         public Vector3 buggyPosition = new Vector3(64f, 0f, 14f);
         public float buggyYaw;
 
-        public enum Design { Buggy, Truck }
+        public enum Design { Buggy, Truck, RallyTruck }
         [Tooltip("Which vehicle to build.")]
         public Design design = Design.Buggy;
         [Tooltip("Drive it in circles while nobody sits in it (to practise riding on it).")]
         public bool autopilot;
         [Tooltip("With the autopilot: a closed loop of world points to lap (empty: drive in a circle).")]
         public Vector3[] autopilotPath = new Vector3[0];
+        [Tooltip("With the autopilot: top speed it aims for (m/s).")]
+        public float autopilotMaxSpeed = 22f;
+        [Tooltip("With the autopilot: seconds it waits at the start of its path each lap (0: doesn't stop).")]
+        public float autopilotStopSeconds = 6f;
+        [Tooltip("With the autopilot: only drive while a player is standing on it.")]
+        public bool autopilotWaitForRider;
 
         public struct Placement
         {
@@ -39,9 +45,18 @@ namespace ShooterMashup.Vehicles
             var structures = FindAnyObjectByType<StructureManager>();
             if (structures == null)
                 return;
-            Vehicle v = Build(structures, buggyPosition, buggyYaw, design == Design.Truck ? TruckPlan() : BuggyPlan());
+            List<Placement> plan = design == Design.Truck ? TruckPlan()
+                : design == Design.RallyTruck ? TruckPlan("Big wheel")
+                : BuggyPlan();
+            Vehicle v = Build(structures, buggyPosition, buggyYaw, plan);
             if (v != null && autopilot)
-                v.gameObject.AddComponent<VehicleAutopilot>().path = autopilotPath;
+            {
+                var pilot = v.gameObject.AddComponent<VehicleAutopilot>();
+                pilot.path = autopilotPath;
+                pilot.maxSpeed = autopilotMaxSpeed;
+                pilot.stopSeconds = autopilotStopSeconds;
+                pilot.waitForRider = autopilotWaitForRider;
+            }
         }
 
         /// <summary>
@@ -49,7 +64,7 @@ namespace ShooterMashup.Vehicles
         /// behind a cab wall of 1x1 walls, low rails and a tailgate round the bed, and a wheel on
         /// each end of each axle (flush on the beam ends).
         /// </summary>
-        public static List<Placement> TruckPlan()
+        public static List<Placement> TruckPlan(string wheel = "Wheel")
         {
             const BuildMaterial wood = BuildMaterial.Wood;
             float beam = PieceCatalog.BeamSize, deck = beam + 0.2f;   // floor top
@@ -69,8 +84,8 @@ namespace ShooterMashup.Vehicles
             Place("Beam 3 m", new Vector3(0, deck, -2.875f));              // tailgate
             foreach (float z in new[] { -2.5f, 2.5f })                     // wheels flush on the axle ends
             {
-                Place("Wheel", new Vector3(1.5f - beam / 2f, beam / 2f, z));
-                Place("Wheel", new Vector3(-1.5f + beam / 2f, beam / 2f, z), 180);
+                Place(wheel, new Vector3(1.5f - beam / 2f, beam / 2f, z));
+                Place(wheel, new Vector3(-1.5f + beam / 2f, beam / 2f, z), 180);
             }
             return plan;
         }

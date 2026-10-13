@@ -11,19 +11,15 @@ namespace ShooterMashup.Vehicles
     [Serializable]
     public class VehicleTuning
     {
-        [Header("Suspension (springs are sized to the vehicle's weight)")]
-        [Tooltip("Wheel travel from full droop to full bump (m).")]
-        public float travel = 0.35f;
+        [Header("Suspension (springs are sized to the vehicle's weight; travel comes with each wheel)")]
         [Tooltip("How far into its travel a wheel sits when the vehicle stands still (0..1).")]
         [Range(0.1f, 0.9f)] public float rideHeight = 0.45f;
         [Tooltip("Suspension damping as a fraction of critical damping.")]
         [Range(0f, 2f)] public float damping = 0.5f;
 
         [Header("Driving")]
-        [Tooltip("Acceleration (m/s²), whatever the vehicle weighs, until engines exist.")]
+        [Tooltip("Acceleration (m/s²) with standard wheels, whatever the vehicle weighs, until engines exist. Each wheel's power scales it; top speed comes from the wheels.")]
         public float acceleration = 7f;
-        [Tooltip("Top speed forwards (m/s). 26 m/s is about 94 km/h.")]
-        public float topSpeed = 26f;
         [Tooltip("Top speed in reverse (m/s).")]
         public float reverseSpeed = 8f;
         [Tooltip("Braking deceleration (m/s²).")]

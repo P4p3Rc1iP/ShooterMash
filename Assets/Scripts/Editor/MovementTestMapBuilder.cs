@@ -28,6 +28,7 @@ namespace ShooterMashup.EditorTools
         static readonly Vector3 CharacterArea = new Vector3(0f, 0f, 140f);
         static readonly Vector3 BuildingArea = new Vector3(-190f, 0f, 0f);
         static readonly Vector3 DrivingArea = new Vector3(190f, 0f, 0f);
+        static readonly Vector3 OffRoadArea = new Vector3(0f, 0f, -200f);
         // Where you arrive (feet) and which way you face, by portal or road.
         static readonly Vector3 HubArrival = new Vector3(0f, 0f, -4f);
         static readonly (Vector3 at, float yaw) CharacterArrival = (new Vector3(0f, 0f, 140f), 0f); // the middle of the area
@@ -37,6 +38,7 @@ namespace ShooterMashup.EditorTools
         static readonly Vector3 BarnCorner = new Vector3(60f, 0f, 24f);
         static readonly Vector3 TowerCorner = new Vector3(84f, 0f, 44f);
         static readonly (Vector3 at, float yaw) DrivingArrival = (new Vector3(108f, 0f, 0f), 90f);
+        static readonly (Vector3 at, float yaw) OffRoadArrival = (new Vector3(-150f, 0f, -105f), 180f); // facing the rally truck
 
         static Transform root;
         static Transform area;   // the area being built; groups go under it
@@ -71,7 +73,7 @@ namespace ShooterMashup.EditorTools
             BuildLighting();
 
             // Ground.
-            Box("Floor", new Vector3(0, -0.4f, 0), new Vector3(560, 0.8f, 560), matFloor);
+            Box("Floor", new Vector3(0, -0.4f, 0), new Vector3(720, 0.8f, 720), matFloor);
 
             // Three test areas around a hub at the origin, each in its own space.
             // Character tests: you arrive in the middle, with the tests in groups around you. The
@@ -106,6 +108,9 @@ namespace ShooterMashup.EditorTools
             BuildVehicleTrack(new Vector3(-70f, 0f, -60f), 0f);
             List<Vector3> raceLine = BuildRaceTrack(new Vector3(-30f, 0f, -55f));
             BuildRaceTruck(raceLine);
+
+            area = Area("Off-road", OffRoadArea);
+            BuildOffRoad();
 
             area = Area("Hub", Vector3.zero);
             BuildHub();
@@ -385,16 +390,16 @@ namespace ShooterMashup.EditorTools
             return z + count - 1f;
         }
 
-        /// <summary>35 cm ridges under one side at a time, 2 m apart, so the body rolls left and right.</summary>
-        static float SideRidges(Transform parent, float z, int count, float width)
+        /// <summary>35 cm ridges under one side at a time, `spacing` apart, so the body rolls left and right.</summary>
+        static float SideRidges(Transform parent, float z, int count, float width, float spacing = 2f)
         {
             for (int i = 0; i < count; i++)
             {
                 float side = i % 2 == 0 ? -1f : 1f;
-                Box($"Side ridge {i}", new Vector3(side * width / 4f, 0f, z + i * 2f), new Vector3(width / 2f, 0.5f, 0.5f),
+                Box($"Side ridge {i}", new Vector3(side * width / 4f, 0f, z + i * spacing), new Vector3(width / 2f, 0.5f, 0.5f),
                     i % 2 == 0 ? matWall : matTrim, parent, Quaternion.Euler(45f, 0f, 0f));
             }
-            return z + (count - 1) * 2f;
+            return z + (count - 1) * spacing;
         }
 
         /// <summary>1 m tall humps, 8° up and down, 4 m apart.</summary>
@@ -519,13 +524,100 @@ namespace ShooterMashup.EditorTools
         }
 
         /// <summary>
+        /// A long off-road loop for high speed (about 960 m, 20 m wide, driven clockwise): two 300 m
+        /// straights joined by 70 m bends. The north straight has rollers, washboard, a long
+        /// table-top jump and rocks; the south one side ridges, bigger rollers and rocks. A rally
+        /// truck on big wheels waits at the start and only drives while someone stands on it,
+        /// up to 43 m/s (about 155 km/h).
+        /// </summary>
+        static void BuildOffRoad()
+        {
+            var parent = Group("Off-road track");
+            parent.localPosition = new Vector3(-150f, 0f, 80f);
+            const float width = 20f;
+            var track = new TrackBuilder(parent, width, 4f);
+            Label("off-road track\nstart", new Vector3(-8f, 4f, 11f), parent, 180f);
+            Box("Start line", new Vector3(1f, 0.01f, 0f), new Vector3(1f, 0.02f, width), matSlick, parent);
+
+            // North straight, heading +x: 300 m.
+            track.Straight(20f);
+            Rollers(track.Section("Rollers"), 0f, 4, width, 0.6f, 4f, 10f);
+            track.Straight(100f);
+            track.Straight(20f);
+            Washboard(track.Section("Washboard"), 0f, 20, width);
+            track.Straight(25f);
+            track.Straight(20f);
+            Transform jump = track.Section("Jump");
+            float z = Slope(jump, "Jump ramp", 0f, 6f, 0.8f, 10f, 0.3f, matTarget);
+            Box("Jump table", new Vector3(0f, 0.4f, z + 12.5f), new Vector3(10f, 0.8f, 25f), matTrim, jump);
+            Slope(jump, "Landing ramp", z + 25f, -6f, 0.8f, 10f, 0.3f, matWall);
+            Label("jump", new Vector3(0f, 3f, 0f), jump, 0f);
+            track.Straight(45f);
+            track.Straight(20f);
+            Rocks(track.Section("Rocks"), 0f, 40f, width - 2f, 40, 0.2f, 0.4f, 21);
+            track.Straight(40f);
+            track.Straight(10f);
+
+            track.Arc(70f, -90f);                 // right
+            track.Straight(20f);
+            track.Arc(70f, -90f);
+
+            // South straight, heading -x: 300 m.
+            track.Straight(30f);
+            SideRidges(track.Section("Side ridges"), 0f, 8, width, 6f);
+            track.Straight(45f);
+            track.Straight(25f);
+            Rollers(track.Section("Big rollers"), 0f, 3, width, 0.8f, 5f, 8f);
+            track.Straight(75f);
+            track.Straight(25f);
+            Rocks(track.Section("Rocks 2"), 0f, 50f, width - 2f, 50, 0.2f, 0.45f, 23);
+            track.Straight(50f);
+            track.Straight(50f);
+
+            track.Arc(70f, -90f);
+            track.Straight(20f);
+            track.Arc(70f, -90f);
+
+            var line = new List<Vector3>();
+            foreach (Vector3 p in track.Line)
+                line.Add(parent.TransformPoint(p));
+            if (Vector3.Distance(line[0], line[line.Count - 1]) < 0.1f)
+                line.RemoveAt(line.Count - 1);
+
+            var truck = new GameObject("Rally truck").AddComponent<VehicleShowcase>();
+            truck.design = VehicleShowcase.Design.RallyTruck;
+            truck.autopilot = true;
+            truck.autopilotPath = line.ToArray();
+            truck.autopilotMaxSpeed = 43f;
+            truck.autopilotStopSeconds = 0f;
+            truck.autopilotWaitForRider = true;
+            truck.buggyPosition = line[0];
+            truck.buggyYaw = 90f;
+            Label("rally truck: stand on the back and it drives\n(up to 150 km/h); step off and it stops",
+                new Vector3(0f, 4.5f, 11f), parent, 180f);
+        }
+
+        /// <summary>Long, gentle humps `height` tall rising and falling at `angle`, `gap` apart.</summary>
+        static float Rollers(Transform parent, float z, int count, float width, float height, float angle, float gap)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                if (i > 0) z += gap;
+                z = Slope(parent, "Roller up", z, angle, height, width, 0.3f, matWall);
+                z = Slope(parent, "Roller down", z, -angle, height, width, 0.3f, matTrim);
+            }
+            return z;
+        }
+
+        /// <summary>
         /// Lays out a track like a turtle, with painted kerbs along both edges: flat enough to
         /// drive over, so the track is a suggestion of turns rather than a channel you're stuck in.
         /// Keeps its centre line, and makes sections to put features in.
         /// </summary>
         sealed class TrackBuilder
         {
-            const float SampleSpacing = 2f, KerbHeight = 0.06f, KerbThickness = 1f;
+            const float KerbHeight = 0.06f, KerbThickness = 1f;
+            readonly float sampleSpacing;
 
             readonly Transform parent;
             readonly float halfWidth;
@@ -539,10 +631,11 @@ namespace ShooterMashup.EditorTools
             /// <summary>The centre line so far, in the parent's space, about 2 m apart.</summary>
             public readonly List<Vector3> Line = new List<Vector3> { Vector3.zero };
 
-            public TrackBuilder(Transform parent, float width)
+            public TrackBuilder(Transform parent, float width, float sampleSpacing = 2f)
             {
                 this.parent = parent;
                 halfWidth = width / 2f;
+                this.sampleSpacing = sampleSpacing;
             }
 
             /// <summary>A child object at the current position facing along the track (its +z), to build features in.</summary>
@@ -556,7 +649,7 @@ namespace ShooterMashup.EditorTools
 
             public void Straight(float length)
             {
-                int steps = Mathf.Max(1, Mathf.CeilToInt(length / SampleSpacing));
+                int steps = Mathf.Max(1, Mathf.CeilToInt(length / sampleSpacing));
                 Vector3 from = Position, dir = Direction, left = Left;
                 for (int i = 0; i < steps; i++)
                 {
@@ -573,7 +666,7 @@ namespace ShooterMashup.EditorTools
                 float sign = Mathf.Sign(degrees);
                 Vector3 center = Position + Left * (radius * sign);
                 float startHeading = heading;
-                int steps = Mathf.Max(2, Mathf.CeilToInt(radius * Mathf.Abs(degrees) * Mathf.Deg2Rad / SampleSpacing));
+                int steps = Mathf.Max(2, Mathf.CeilToInt(radius * Mathf.Abs(degrees) * Mathf.Deg2Rad / sampleSpacing));
                 Vector3 previous = Position, previousLeft = Left;
                 for (int i = 1; i <= steps; i++)
                 {
@@ -616,11 +709,13 @@ namespace ShooterMashup.EditorTools
             PortalPair("Building", new Vector3(-6f, 0f, 5f), -45f, BuildingArrival, parent, matDirt);
             PortalPair("Character tests", new Vector3(0f, 0f, 7f), 0f, CharacterArrival, parent, matSlick);
             PortalPair("Driving", new Vector3(6f, 0f, 5f), 45f, DrivingArrival, parent, matTarget);
+            PortalPair("Off-road", new Vector3(0f, 0f, -9f), 180f, OffRoadArrival, parent, matSlime);
 
             // Roads to the areas, for driving there.
             Road(new Vector3(0f, 0f, 10f), CharacterArrival.at, parent);
             Road(new Vector3(-8f, 0f, 0f), BuildingArrival.at, parent);
             Road(new Vector3(8f, 0f, 0f), DrivingArrival.at, parent);
+            Road(new Vector3(0f, 0f, -14f), OffRoadArrival.at, parent);
 
             // A buggy to drive, facing the road to the driving area.
             var buggy = new GameObject("Hub buggy").AddComponent<VehicleShowcase>();
@@ -632,9 +727,9 @@ namespace ShooterMashup.EditorTools
             var truck = new GameObject("Circling truck").AddComponent<VehicleShowcase>();
             truck.design = VehicleShowcase.Design.Truck;
             truck.autopilot = true;
-            truck.buggyPosition = new Vector3(0f, 0f, -30f);
+            truck.buggyPosition = new Vector3(25f, 0f, -30f); // circles clear of the road south
             truck.buggyYaw = 90f;
-            Label("circling truck:\njump on the back to ride it", new Vector3(0f, 4f, -18f), parent, 180f);
+            Label("circling truck:\njump on the back to ride it", new Vector3(25f, 4f, -22f), parent, 180f);
         }
 
         /// <summary>A portal at the hub to an area's arrival point, and one there back to the hub.</summary>

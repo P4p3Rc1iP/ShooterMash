@@ -219,4 +219,6 @@ Agreed with the owner:
   showcase gets world corners), and **driving** (x +190: the rough test track and a closed race
   circuit with a table-top jump and bumps (washboard, side ridges, dunes, rocks), laid out from
   straights and arcs so it always closes; a race truck laps it at up to 22 m/s (`VehicleAutopilot`
-  following the centre line) and stops at the start line each lap so you can ride it).
+  following the centre line) and stops at the start line each lap so you can ride it), and
+  **off-road** (z -200, fourth hub portal: a 960 m loop with long bumpy straights; a rally truck on
+  big wheels drives it only while someone stands on it, ~120 km/h on the track, 150 km/h on flat).

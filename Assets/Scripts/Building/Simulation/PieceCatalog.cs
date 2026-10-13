@@ -71,13 +71,19 @@ namespace ShooterMashup.Building
         public readonly float radius;
         public readonly float width;      // along the axle, which is the piece's x axis
         public readonly float mass;       // kg
+        public readonly float travel;     // suspension travel, full droop to full bump (m)
+        public readonly float topSpeed;   // how fast it can drive the vehicle (m/s)
+        public readonly float power;      // drive force, relative to a standard wheel
 
-        public WheelSpec(Vector3 center, float radius, float width, float mass)
+        public WheelSpec(Vector3 center, float radius, float width, float mass, float travel, float topSpeed, float power)
         {
             this.center = center;
             this.radius = radius;
             this.width = width;
             this.mass = mass;
+            this.travel = travel;
+            this.topSpeed = topSpeed;
+            this.power = power;
         }
     }
 
@@ -173,7 +179,10 @@ namespace ShooterMashup.Building
             foreach (float width in Sizes)
                 all.Add(Stairs($"Stairs {N(rise)} m up, {N(width)} m wide", width, 2f * rise, rise).In(wood, stone));
             // Vehicle parts, only buildable on vehicles.
-            all.Add(WheelPiece("Wheel").In(wood, iron));
+            // A 1 m wheel (35 cm of travel, up to 26 m/s, about 94 km/h) and a 1.5 m off-road wheel (60 cm
+            // of travel, up to 46 m/s, about 165 km/h, with 1.5 times the push).
+            all.Add(WheelPiece("Wheel", 0.5f, 0.4f, 40f, 0.35f, 26f, 1f).In(wood, iron));
+            all.Add(WheelPiece("Big wheel", 0.75f, 0.55f, 90f, 0.6f, 46f, 1.5f).In(wood, iron));
             all.Add(DriverSeat("Driver seat").In(wood));
             return all.ToArray();
         }
@@ -396,18 +405,19 @@ namespace ShooterMashup.Building
         }
 
         /// <summary>
-        /// A 1 m wheel on a short mount, with its axle along x. It snaps by two points: on a beam's
+        /// A wheel on a short mount, with its axle along x. It snaps by two points: on a beam's
         /// centre line, so the mount sits against the side of a beam running along z; and half a
         /// beam further in, so it sits flush on the end of a beam running along x (an axle). The
         /// wheel is on the +x side; turn it 180° for the other side of a vehicle. (Vehicle parts
-        /// are off the 1 m grid.)
+        /// are off the 1 m grid.) Each wheel brings its own suspension travel, top speed and power,
+        /// so bigger wheels make a faster, rougher-country vehicle.
         /// </summary>
-        static PieceDef WheelPiece(string name)
+        static PieceDef WheelPiece(string name, float radius, float width, float mass, float travel, float topSpeed, float power)
         {
-            const float radius = 0.5f, width = 0.4f, mount = 0.2f, gap = 0.03f;
+            const float mount = 0.2f, gap = 0.03f;
             float inner = Beam / 2f;
             var mountBox = new Obb(new Vector3(inner + mount / 2f, 0, 0), new Vector3(mount, mount, mount));
-            var wheel = new WheelSpec(new Vector3(inner + mount + gap + width / 2f, 0, 0), radius, width, 40f);
+            var wheel = new WheelSpec(new Vector3(inner + mount + gap + width / 2f, 0, 0), radius, width, mass, travel, topSpeed, power);
             return new PieceDef(name, new[] { mountBox }, new[] { Vector3.zero, new Vector3(inner, 0, 0) }).WithWheel(wheel);
         }
 
