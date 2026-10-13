@@ -11,9 +11,11 @@ using UnityEngine.Rendering;
 namespace ShooterMashup.EditorTools
 {
     /// <summary>
-    /// Builds a graybox test map for the player controller: stairs, ramps, jump crates,
-    /// crouch and prone tunnels, ladders, fall-damage towers, water and slime tanks, a slick floor
-    /// and a strafe-jump lane. Laid out in metres on a 1 m dev grid.
+    /// Builds the graybox test map: a spawn hub with portals and roads to three areas. Character
+    /// tests (stairs, ramps, jump crates, crouch and prone tunnels, a lean corner, ladders,
+    /// fall-damage towers, water and slime tanks, a slick floor), building (the showcase,
+    /// diggable dirt, bridge cliffs) and driving (a rough track and a race circuit). Laid out in
+    /// metres on a 1 m dev grid.
     /// </summary>
     public static class MovementTestMapBuilder
     {
@@ -23,12 +25,12 @@ namespace ShooterMashup.EditorTools
         const string MeshAssetPath = ArtFolder + "/MovementTestMeshes.asset";
 
         // The hub (spawn, a buggy, portals) is at the origin; the areas are a short drive away.
-        static readonly Vector3 CharacterArea = new Vector3(0f, 0f, 170f);
+        static readonly Vector3 CharacterArea = new Vector3(0f, 0f, 140f);
         static readonly Vector3 BuildingArea = new Vector3(-190f, 0f, 0f);
         static readonly Vector3 DrivingArea = new Vector3(190f, 0f, 0f);
         // Where you arrive (feet) and which way you face, by portal or road.
         static readonly Vector3 HubArrival = new Vector3(0f, 0f, -4f);
-        static readonly (Vector3 at, float yaw) CharacterArrival = (new Vector3(0f, 0f, 120f), 0f);
+        static readonly (Vector3 at, float yaw) CharacterArrival = (new Vector3(0f, 0f, 140f), 0f); // the middle of the area
         static readonly (Vector3 at, float yaw) BuildingArrival = (new Vector3(-134f, 0f, -18f), 0f);
         // The showcase structures in the building area's space, spread out with room between them.
         static readonly Vector3 FarmCorner = new Vector3(34f, 0f, 24f);
@@ -72,18 +74,27 @@ namespace ShooterMashup.EditorTools
             Box("Floor", new Vector3(0, -0.4f, 0), new Vector3(560, 0.8f, 560), matFloor);
 
             // Three test areas around a hub at the origin, each in its own space.
+            // Character tests: you arrive in the middle, with the tests in groups around you. The
+            // south group leaves a gap for the road from the hub.
             area = Area("Character tests", CharacterArea);
-            BuildStairs(new Vector3(-29, 0, 8));
-            BuildRamps(new Vector3(11, 0, 8));
-            BuildJumpCrates(new Vector3(-6, 0, 13));
-            BuildTunnels(new Vector3(-23, 0, 23));
-            BuildLadderTower(new Vector3(-8, 0, -18));
-            BuildFallTowers(new Vector3(5, 0, -18));
-            BuildLiquidTank(new Vector3(8, 0, 33), Contents.Water, matWater, "water");
-            BuildLiquidTank(new Vector3(26, 0, 33), Contents.Slime, matSlime, "slime\nslower swimming");
-            BuildLeanCorner(new Vector3(-33, 0, -8));
-            BuildSlickFloor(new Vector3(28, 0, -5));
-            BuildStrafeLane(-38);
+            // North: stepping and climbing.
+            BuildStairs(new Vector3(-22, 0, 22));
+            BuildRamps(new Vector3(6, 0, 22));
+            BuildJumpCrates(new Vector3(-6, 0, 42));
+            GroupLabel("stairs, ramps\nand jump crates", new Vector3(0, 6f, 18f));
+            // East: liquids and slick floor.
+            BuildLiquidTank(new Vector3(40, 0, -2), Contents.Water, matWater, "water");
+            BuildLiquidTank(new Vector3(40, 0, 18), Contents.Slime, matSlime, "slime\nslower swimming");
+            BuildSlickFloor(new Vector3(47, 0, -20));
+            GroupLabel("water, slime\nand a slick floor", new Vector3(26f, 6f, 0f), 90f);
+            // West: crouching, prone and leaning.
+            BuildTunnels(new Vector3(-40, 0, -5));
+            BuildLeanCorner(new Vector3(-34, 0, 20));
+            GroupLabel("tunnels (crouch, prone)\nand leaning", new Vector3(-20f, 6f, 0f), -90f);
+            // South, either side of the road: heights.
+            BuildLadderTower(new Vector3(-16, 0, -24));
+            BuildFallTowers(new Vector3(10, 0, -24));
+            GroupLabel("ladders and\nfall damage", new Vector3(0f, 6f, -18f), 180f);
 
             area = Area("Building", BuildingArea);
             BuildBuildingArea(new Vector3(56, 0, 8));
@@ -288,18 +299,12 @@ namespace ShooterMashup.EditorTools
             Label("slick", new Vector3(at.x, 2f, at.z + 7f), parent, 180);
         }
 
-        static void BuildStrafeLane(float z)
+        /// <summary>A big label naming a group of tests, readable from the middle of the area.</summary>
+        static void GroupLabel(string text, Vector3 position, float yaw = 0f)
         {
-            var parent = Group("Strafe lane");
-            for (int x = -70; x <= 70; x += 5)
-            {
-                bool major = x % 25 == 0;
-                float h = major ? 3.2f : 1.6f;
-                Box($"Marker {x}", new Vector3(x, h / 2, z), new Vector3(0.4f, h, 0.4f), major ? matTarget : matTrim, parent);
-                if (major)
-                    Label($"{x} m", new Vector3(x, 3.8f, z), parent, 180);
-            }
-            Label("strafe-jump lane\nmarkers every 5 m", new Vector3(0, 5.6f, z + 0.8f), parent, 180);
+            var parent = Group("Label " + text.Split('\n')[0]);
+            Label(text, position, parent, yaw);
+            parent.GetComponentInChildren<TextMesh>().characterSize = 0.06f;
         }
 
         /// <summary>
