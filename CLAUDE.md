@@ -217,4 +217,6 @@ Agreed with the owner:
   fall towers; water and slime tanks and slick floor; moving platforms: elevator, slider,
   carousel), **building** (x -190: the showcase, diggable dirt, bridge cliffs; the StructureManager stays at the world origin and the
   showcase gets world corners), and **driving** (x +190: the rough test track and a closed race
-  circuit with a table-top jump, laid out from straights and arcs so it always closes).
+  circuit with a table-top jump and bumps (washboard, side ridges, dunes, rocks), laid out from
+  straights and arcs so it always closes; a race truck laps it at up to 22 m/s (`VehicleAutopilot`
+  following the centre line) and stops at the start line each lap so you can ride it).

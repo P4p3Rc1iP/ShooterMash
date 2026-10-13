@@ -104,7 +104,8 @@ namespace ShooterMashup.EditorTools
 
             area = Area("Driving", DrivingArea);
             BuildVehicleTrack(new Vector3(-70f, 0f, -60f), 0f);
-            BuildRaceTrack(new Vector3(-30f, 0f, -55f));
+            List<Vector3> raceLine = BuildRaceTrack(new Vector3(-30f, 0f, -55f));
+            BuildRaceTruck(raceLine);
 
             area = Area("Hub", Vector3.zero);
             BuildHub();
@@ -349,6 +350,7 @@ namespace ShooterMashup.EditorTools
             parent.GetComponentInChildren<TextMesh>().characterSize = 0.06f;
         }
 
+
         /// <summary>
         /// A rough track for vehicles, 10 m wide, starting at `at` and running towards `yaw`
         /// (0 = +z): washboard, ridges that lift one side at a time, two dunes, a jump with a
@@ -359,49 +361,66 @@ namespace ShooterMashup.EditorTools
             var parent = Group("Vehicle track");
             parent.SetLocalPositionAndRotation(at, Quaternion.Euler(0f, yaw, 0f));
             const float width = 10f;
-            float z = 0f;
             Label("vehicle test track\nwashboard, ridges, dunes, jump, rocks", new Vector3(0f, 3f, -1f), parent);
 
-            // Washboard: low ridges every metre (boxes turned 45°: 21 cm tall).
-            for (int i = 0; i < 10; i++)
-                Box($"Washboard {i}", new Vector3(0f, 0f, z + 1f + i), new Vector3(width, 0.3f, 0.3f), i % 2 == 0 ? matTrim : matWall,
-                    parent, Quaternion.Euler(45f, 0f, 0f));
-            z += 16f;
+            float z = Washboard(parent, 1f, 10, width) + 6f;
+            z = SideRidges(parent, z, 6, width) + 6f;
+            z = Dunes(parent, z, 2, width) + 4f;
 
-            // Ridges under one side at a time, so the body rolls left and right.
-            for (int i = 0; i < 6; i++)
+            // A jump: 15° up to 1.2 m, a 6 m gap, and a landing ramp down.
+            z = Slope(parent, "Jump ramp", z, 15f, 1.2f, width / 2f, 0.3f, matTarget);
+            z = Slope(parent, "Landing ramp", z + 6f, -15f, 1.2f, width / 2f, 0.3f, matWall) + 6f;
+
+            Rocks(parent, z, 14f, width, 30, 0.3f, 0.8f, 7);
+        }
+
+        // Bumps, each laid out along +z of `parent` from `z`, across `width`. They return where they end.
+
+        /// <summary>Low ridges a metre apart (boxes turned 45°: 21 cm tall).</summary>
+        static float Washboard(Transform parent, float z, int count, float width)
+        {
+            for (int i = 0; i < count; i++)
+                Box($"Washboard {i}", new Vector3(0f, 0f, z + i), new Vector3(width, 0.3f, 0.3f), i % 2 == 0 ? matTrim : matWall,
+                    parent, Quaternion.Euler(45f, 0f, 0f));
+            return z + count - 1f;
+        }
+
+        /// <summary>35 cm ridges under one side at a time, 2 m apart, so the body rolls left and right.</summary>
+        static float SideRidges(Transform parent, float z, int count, float width)
+        {
+            for (int i = 0; i < count; i++)
             {
                 float side = i % 2 == 0 ? -1f : 1f;
                 Box($"Side ridge {i}", new Vector3(side * width / 4f, 0f, z + i * 2f), new Vector3(width / 2f, 0.5f, 0.5f),
                     i % 2 == 0 ? matWall : matTrim, parent, Quaternion.Euler(45f, 0f, 0f));
             }
-            z += 18f;
+            return z + (count - 1) * 2f;
+        }
 
-            // Two dunes: 1 m tall humps, 8° up and down.
-            const float thick = 0.3f;
-            for (int d = 0; d < 2; d++)
+        /// <summary>1 m tall humps, 8° up and down, 4 m apart.</summary>
+        static float Dunes(Transform parent, float z, int count, float width)
+        {
+            for (int d = 0; d < count; d++)
             {
-                z = Slope(parent, "Dune up", z, 8f, 1f, width, thick, matWall);
-                z = Slope(parent, "Dune down", z, -8f, 1f, width, thick, matTrim);
-                z += 4f;
+                if (d > 0) z += 4f;
+                z = Slope(parent, "Dune up", z, 8f, 1f, width, 0.3f, matWall);
+                z = Slope(parent, "Dune down", z, -8f, 1f, width, 0.3f, matTrim);
             }
-            z += 4f;
+            return z;
+        }
 
-            // A jump: 15° up to 1.2 m, a 6 m gap, and a landing ramp down.
-            z = Slope(parent, "Jump ramp", z, 15f, 1.2f, width / 2f, thick, matTarget);
-            z += 6f;
-            z = Slope(parent, "Landing ramp", z, -15f, 1.2f, width / 2f, thick, matWall);
-            z += 6f;
-
-            // Rocks: tilted boxes of different sizes, half buried. Seeded, so the map is the same every build.
-            var random = new System.Random(7);
+        /// <summary>Tilted boxes of different sizes, half buried, over `length` m. Seeded, so the map is the same every build.</summary>
+        static float Rocks(Transform parent, float z, float length, float width, int count, float minHeight, float maxHeight, int seed)
+        {
+            var random = new System.Random(seed);
             float F(float min, float max) => min + (float)random.NextDouble() * (max - min);
-            for (int i = 0; i < 30; i++)
+            for (int i = 0; i < count; i++)
             {
-                var size = new Vector3(F(0.6f, 1.6f), F(0.3f, 0.8f), F(0.6f, 1.6f));
-                var center = new Vector3(F(-width / 2f, width / 2f), F(-0.15f, 0.1f), z + F(0f, 14f));
+                var size = new Vector3(F(0.6f, 1.6f), F(minHeight, maxHeight), F(0.6f, 1.6f));
+                var center = new Vector3(F(-width / 2f, width / 2f), F(-0.15f, 0.1f), z + F(0f, length));
                 Box($"Rock {i}", center, size, matTrim, parent, Quaternion.Euler(F(-20f, 20f), F(0f, 90f), F(-20f, 20f)));
             }
+            return z + length;
         }
 
         /// <summary>
@@ -420,28 +439,27 @@ namespace ShooterMashup.EditorTools
             return z + run;
         }
 
-
         /// <summary>
         /// A closed race circuit, 12 m wide between flat red and grey kerbs, starting at `start`
         /// heading +x: a straight with a table-top jump (6 m wide in the middle, so you can go round
-        /// it), a wide sweeper, a chicane, a tight bend, an S-bend, and two corners back to the
-        /// start. It's driven anticlockwise. Built from straights and arcs; the last straight
-        /// lengths are worked out so the loop always closes.
+        /// it), a wide sweeper, washboard, a chicane, side ridges, a tight bend, an S-bend, dunes on
+        /// the back straight, and rocks on the long straight back to the start. It's driven
+        /// anticlockwise. Built from straights and arcs; the last straight lengths are worked out
+        /// so the loop always closes. Returns its centre line (world points about 2 m apart), for
+        /// an autopilot to lap.
         /// </summary>
-        static void BuildRaceTrack(Vector3 start)
+        static List<Vector3> BuildRaceTrack(Vector3 start)
         {
             var parent = Group("Race track");
             parent.localPosition = start;
             var track = new TrackBuilder(parent, 12f);
+            const float width = 12f;
             Label("race track\nstart / finish", new Vector3(0f, 4f, 9f), parent, 90f);
             Box("Start line", new Vector3(1f, 0.01f, 0f), new Vector3(1f, 0.02f, 12f), matSlick, parent);
 
             track.Straight(25f);
-            // The jump: in the straight's own space (forward is the track direction).
-            var jump = new GameObject("Jump").transform;
-            jump.SetParent(parent, false);
-            jump.SetLocalPositionAndRotation(track.Position, Quaternion.LookRotation(track.Direction));
             // A table top: up, 8 m flat at 1 m, down. Fast jumps clear the top, slow ones land on it.
+            Transform jump = track.Section("Jump");
             float z = Slope(jump, "Jump ramp", 0f, 15f, 1f, 6f, 0.3f, matTarget);
             Box("Jump table", new Vector3(0f, 0.5f, z + 4f), new Vector3(6f, 1f, 8f), matTrim, jump);
             Slope(jump, "Landing ramp", z + 8f, -15f, 1f, 6f, 0.3f, matWall);
@@ -449,10 +467,12 @@ namespace ShooterMashup.EditorTools
             track.Straight(35f);
 
             track.Arc(25f, 90f);                  // wide sweeper, left
+            Washboard(track.Section("Washboard"), 2f, 10, width);
             track.Straight(15f);
             track.Arc(15f, -35f);                 // chicane: right, left, right
             track.Arc(15f, 70f);
             track.Arc(15f, -35f);
+            SideRidges(track.Section("Side ridges"), 1.5f, 4, width);
             track.Straight(10f);
             track.Arc(10f, 90f);                  // tight left
             track.Arc(15f, -40f);                 // S-bend: right, then left
@@ -464,15 +484,44 @@ namespace ShooterMashup.EditorTools
             float across = q.x, down = q.z - 40f;
             if (across < 0f || down < 0f)
                 Debug.LogError($"Race track doesn't close: {across}, {down}");
+            if (across > 45f)
+                Dunes(track.Section("Dunes"), 5f, 2, width);
             track.Straight(across);
             track.Arc(20f, 90f);
+            Rocks(track.Section("Rocks"), 10f, Mathf.Min(30f, down - 15f), width - 2f, 25, 0.25f, 0.5f, 11);
             track.Straight(down);
             track.Arc(20f, 90f);
+
+            var line = new List<Vector3>();
+            foreach (Vector3 p in track.Line)
+                line.Add(parent.TransformPoint(p));
+            return line;
+        }
+
+        /// <summary>
+        /// A flatbed truck that laps the race circuit at speed, over its bumps and jump, stopping at
+        /// the start line for a few seconds each lap: hop on the back to ride it.
+        /// </summary>
+        static void BuildRaceTruck(List<Vector3> line)
+        {
+            if (Vector3.Distance(line[0], line[line.Count - 1]) < 0.1f)
+                line.RemoveAt(line.Count - 1);   // the loop's end is its start
+            var truck = new GameObject("Race truck").AddComponent<VehicleShowcase>();
+            truck.design = VehicleShowcase.Design.Truck;
+            truck.autopilot = true;
+            truck.autopilotPath = line.ToArray();
+            truck.buggyPosition = line[0];
+            Vector3 heading = line[1] - line[0];
+            truck.buggyYaw = Mathf.Atan2(heading.x, heading.z) * Mathf.Rad2Deg;
+            var parent = Group("Race truck sign");
+            parent.SetParent(root, false);
+            Label("race truck: laps the track,\nstops here every lap: hop on the back", line[0] + new Vector3(-4f, 3.5f, -8f), parent);
         }
 
         /// <summary>
         /// Lays out a track like a turtle, with painted kerbs along both edges: flat enough to
         /// drive over, so the track is a suggestion of turns rather than a channel you're stuck in.
+        /// Keeps its centre line, and makes sections to put features in.
         /// </summary>
         sealed class TrackBuilder
         {
@@ -487,10 +536,22 @@ namespace ShooterMashup.EditorTools
             public Vector3 Direction => new Vector3(Mathf.Cos(heading * Mathf.Deg2Rad), 0f, Mathf.Sin(heading * Mathf.Deg2Rad));
             Vector3 Left => new Vector3(-Mathf.Sin(heading * Mathf.Deg2Rad), 0f, Mathf.Cos(heading * Mathf.Deg2Rad));
 
+            /// <summary>The centre line so far, in the parent's space, about 2 m apart.</summary>
+            public readonly List<Vector3> Line = new List<Vector3> { Vector3.zero };
+
             public TrackBuilder(Transform parent, float width)
             {
                 this.parent = parent;
                 halfWidth = width / 2f;
+            }
+
+            /// <summary>A child object at the current position facing along the track (its +z), to build features in.</summary>
+            public Transform Section(string name)
+            {
+                var t = new GameObject(name).transform;
+                t.SetParent(parent, false);
+                t.SetLocalPositionAndRotation(Position, Quaternion.LookRotation(Direction));
+                return t;
             }
 
             public void Straight(float length)
@@ -498,7 +559,11 @@ namespace ShooterMashup.EditorTools
                 int steps = Mathf.Max(1, Mathf.CeilToInt(length / SampleSpacing));
                 Vector3 from = Position, dir = Direction, left = Left;
                 for (int i = 0; i < steps; i++)
-                    Kerbs(from + dir * (length * i / steps), from + dir * (length * (i + 1) / steps), left, left);
+                {
+                    Vector3 a = from + dir * (length * i / steps), b = from + dir * (length * (i + 1) / steps);
+                    Kerbs(a, b, left, left);
+                    Line.Add(b);
+                }
                 Position = from + dir * length;
             }
 
@@ -515,6 +580,7 @@ namespace ShooterMashup.EditorTools
                     heading = startHeading + degrees * i / steps;
                     Vector3 p = center - Left * (radius * sign);
                     Kerbs(previous, p, previousLeft, Left);
+                    Line.Add(p);
                     previous = p;
                     previousLeft = Left;
                 }
@@ -536,6 +602,7 @@ namespace ShooterMashup.EditorTools
                 kerbs++;
             }
         }
+
 
         /// <summary>
         /// The hub at the origin: where you spawn, with a buggy to drive and a portal to each area

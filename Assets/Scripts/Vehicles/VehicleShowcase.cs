@@ -23,6 +23,8 @@ namespace ShooterMashup.Vehicles
         public Design design = Design.Buggy;
         [Tooltip("Drive it in circles while nobody sits in it (to practise riding on it).")]
         public bool autopilot;
+        [Tooltip("With the autopilot: a closed loop of world points to lap (empty: drive in a circle).")]
+        public Vector3[] autopilotPath = new Vector3[0];
 
         public struct Placement
         {
@@ -39,7 +41,7 @@ namespace ShooterMashup.Vehicles
                 return;
             Vehicle v = Build(structures, buggyPosition, buggyYaw, design == Design.Truck ? TruckPlan() : BuggyPlan());
             if (v != null && autopilot)
-                v.gameObject.AddComponent<VehicleAutopilot>();
+                v.gameObject.AddComponent<VehicleAutopilot>().path = autopilotPath;
         }
 
         /// <summary>

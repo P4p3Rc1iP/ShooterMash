@@ -8,7 +8,8 @@ driving model takes after Trailmakers, where whatever you build drives decently.
 Rebuild the test map and press Play. A buggy stands to the right of the spawn hub, facing the
 road east to the **driving area** (or walk through the red portal). There: a rough test track
 (washboard, side ridges, dunes, a gap jump, rocks) and a closed race circuit (a sweeper, a
-chicane, a tight bend, an S-bend and a table-top jump).
+chicane, a tight bend, an S-bend, a table-top jump, and bumps along the way). A race truck laps
+the circuit at up to 22 m/s and stops at the start line every lap: hop on the back to ride it.
 
 | Input | Action |
 | --- | --- |
