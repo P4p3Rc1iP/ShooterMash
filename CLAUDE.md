@@ -36,7 +36,7 @@ Key decisions so far:
   multiples of an `Inch` constant so they can still be compared with the ET source.
 - **Presets:** `MovePreset.ShooterMash` is the default and our own value set: ET rounded to metric
   (1.8 m, 6.4 m/s run, 20 m/s² gravity...) plus building-driven changes: a 0.7 m wide hull (ET 0.91;
-  fits between pillars 1 m apart, 0.75 m gap), 0.52 m step height (run
+  fits between pillars 1 m apart, 0.77 m gap), 0.52 m step height (run
   up 50 cm steps), a 0.6 m prone hull (fits under a floor on 1 m pillars, 0.8 m clearance),
   and gentler stamina (drain 0.1/s = 10 s of sprint, regen 0.05/s; ET: 0.25 and 0.025).
   `EtExact` is kept for comparison; F4 toggles them in play mode.
@@ -74,8 +74,9 @@ Agreed with the owner:
 - Pieces come in set materials (enforced by `BuildSystem`): wood has every shape (prototyping);
   stone has slabs (0.5 m thick floors that snap on both faces), pillars and stairs; iron has
   pillars, beams and diagonal beams (45° and 27°, rising 1 or 3 m, snapping at both ends of
-  their centre line like roofs; beams snap by their centre line; beams are 0.25 m thick like
-  pillars, a bit more than the 0.2 m walls). Wood also has see-through
+  their centre line like roofs; beams snap by their centre line; horizontal beams are 0.25 m,
+  pillars 0.23 m and diagonals 0.21 m, all a bit more than the 0.2 m walls and each a touch
+  thinner than the last so faces never coincide and z-fight). Wood also has see-through
   1 m wide ladders (1 and 3 m tall; climbable through
   `SurfaceFlags.Ladder`, which the piece view adds as a `PmSurface`). Roofs snap by their centre
   plane, so roofs, diagonals and beams snapped to one point cross there (the owner's choice

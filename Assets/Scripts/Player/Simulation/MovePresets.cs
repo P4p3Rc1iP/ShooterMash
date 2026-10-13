@@ -70,7 +70,7 @@ namespace ShooterMashup.Player
 
         static void ApplyShooterMash(MoveConfig c)
         {
-            c.mins = new Vector3(-0.35f, -0.6f, -0.35f);     // 0.7 m wide: fits between pillars 1 m apart (0.75 m gap)
+            c.mins = new Vector3(-0.35f, -0.6f, -0.35f);     // 0.7 m wide: fits between pillars 1 m apart (0.77 m gap)
             c.maxs = new Vector3(0.35f, 1.2f, 0.35f);      // 1.8 m tall
             c.standViewHeight = 1.0f;                                // eyes at 1.6 m
             c.crouchViewHeight = 0.4f;                               // crouched 1.2 m tall

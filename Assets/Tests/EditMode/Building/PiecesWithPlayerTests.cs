@@ -117,7 +117,7 @@ namespace ShooterMashup.Building.Tests
         [TestCase(MovePreset.EtExact, false)]
         public void Player_SqueezesBetweenPillarsAMetreApart(MovePreset preset, bool fits)
         {
-            // Two 3 m pillars on the 1 m grid leave a 0.75 m gap: the ShooterMash player (0.7 m wide)
+            // Two 3 m pillars on the 1 m grid leave a 0.77 m gap: the ShooterMash player (0.7 m wide)
             // fits through, ET's (0.91 m) doesn't.
             PieceDef pillar = System.Array.Find(PieceCatalog.All, d => d.name == "Pillar 3 m");
             Box(new Vector3(0, -0.4f, 0), new Vector3(50, 0.8f, 50));

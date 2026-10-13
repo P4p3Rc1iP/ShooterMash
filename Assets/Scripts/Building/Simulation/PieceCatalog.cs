@@ -53,10 +53,14 @@ namespace ShooterMashup.Building
     public static class PieceCatalog
     {
         const float Slab = 0.2f;      // wooden floor and wall thickness
-        const float Post = 0.25f;     // pillar cross-section
-        /// <summary>Beam cross-section (horizontal and diagonal): as thick as a pillar, a bit more than a wall.</summary>
-        public const float BeamSize = Post;
+        // Framing is a bit thicker than a wall, and each kind a touch thinner than the last where
+        // they meet, so their faces never coincide (no z-fighting): horizontal beams, then
+        // pillars, then diagonal beams.
+        /// <summary>Horizontal beam cross-section.</summary>
+        public const float BeamSize = 0.25f;
         const float Beam = BeamSize;
+        const float Post = 0.23f;     // pillar cross-section
+        const float Brace = 0.21f;    // diagonal beam cross-section
         const float StoneSlab = 0.5f; // stone slab thickness
 
         /// <summary>The grid all pieces and snap points line up on.</summary>
@@ -171,7 +175,7 @@ namespace ShooterMashup.Building
             float r = run / 2f;
             Vector3 low = new Vector3(0, 0, -r), high = new Vector3(0, rise, r);
             Quaternion tilt = Quaternion.LookRotation(high - low);
-            var box = new Obb((low + high) / 2f, new Vector3(Beam, Beam, (high - low).magnitude), tilt);
+            var box = new Obb((low + high) / 2f, new Vector3(Brace, Brace, (high - low).magnitude), tilt);
             return new PieceDef(name, new[] { box }, new[] { low, high });
         }
 
