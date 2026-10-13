@@ -731,8 +731,8 @@ namespace ShooterMashup.Building.Tests
         {
             // Any two snap points of a piece are a whole number of metres apart across (and half
             // metres in height: stone slabs are 0.5 m thick), so snapping can never take a
-            // structure off the grid.
-            foreach (PieceDef def in PieceCatalog.All)
+            // structure off the grid. Vehicle parts (wheels, seats) fit beams instead and are exempt.
+            foreach (PieceDef def in PieceCatalog.All.Where(d => !d.VehicleOnly))
             foreach (Vector3 a in def.snapPoints)
             foreach (Vector3 b in def.snapPoints)
                 for (int axis = 0; axis < 3; axis++)

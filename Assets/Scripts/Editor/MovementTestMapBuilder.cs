@@ -91,6 +91,9 @@ namespace ShooterMashup.EditorTools
             BuildTunnels(new Vector3(-40, 0, -5));
             BuildLeanCorner(new Vector3(-34, 0, 20));
             GroupLabel("tunnels (crouch, prone)\nand leaning", new Vector3(-20f, 6f, 0f), -90f);
+            // North-west: moving platforms to ride.
+            BuildMovingPlatforms(new Vector3(-50, 0, 40));
+            GroupLabel("moving platforms:\nelevator, slider, carousel", new Vector3(-36f, 7f, 30f), -45f);
             // South, either side of the road: heights.
             BuildLadderTower(new Vector3(-16, 0, -24));
             BuildFallTowers(new Vector3(10, 0, -24));
@@ -297,6 +300,45 @@ namespace ShooterMashup.EditorTools
             var slick = Box("Slick", new Vector3(at.x, 0.05f, at.z), new Vector3(13, 0.1f, 13), matSlick, parent);
             slick.AddComponent<PmSurface>().flags = SurfaceFlags.Slick;
             Label("slick", new Vector3(at.x, 2f, at.z + 7f), parent, 180);
+        }
+
+        /// <summary>
+        /// Platforms that move, to test riding them: an elevator up to a 6 m ledge, a platform
+        /// sliding 16 m between two 1 m pads, and a slowly turning carousel.
+        /// </summary>
+        static void BuildMovingPlatforms(Vector3 at)
+        {
+            var parent = Group("Moving platforms");
+
+            // Elevator: from the ground up to the top of a 6 m block, and back.
+            Box("Elevator ledge", new Vector3(at.x - 5f, 3f, at.z + 4f), new Vector3(3f, 6f, 3f), matWall, parent);
+            Platform("Elevator", new Vector3(at.x - 5f, 0.15f, at.z + 1f), new Vector3(3f, 0.3f, 3f), parent,
+                MovingPlatform.Motion.BackAndForth, new Vector3(0f, 6f, 0f));
+            Label("elevator", new Vector3(at.x - 5f, 2f, at.z - 1f), parent);
+
+            // Slider: between two 1 m pads, at their height.
+            Box("Slider pad A", new Vector3(at.x - 2f, 0.5f, at.z + 12f), new Vector3(3f, 1f, 3f), matTrim, parent);
+            Box("Slider pad B", new Vector3(at.x + 22f, 0.5f, at.z + 12f), new Vector3(3f, 1f, 3f), matTrim, parent);
+            Platform("Slider", new Vector3(at.x + 2f, 0.85f, at.z + 12f), new Vector3(3f, 0.3f, 3f), parent,
+                MovingPlatform.Motion.BackAndForth, new Vector3(16f, 0f, 0f));
+            Label("slider", new Vector3(at.x + 10f, 2.5f, at.z + 10f), parent);
+
+            // Carousel: a turning 8 x 8 m deck.
+            Platform("Carousel", new Vector3(at.x + 5f, 0.15f, at.z - 10f), new Vector3(8f, 0.3f, 8f), parent,
+                MovingPlatform.Motion.Turn, Vector3.zero);
+            Label("carousel", new Vector3(at.x + 5f, 2f, at.z - 15f), parent);
+        }
+
+        static void Platform(string name, Vector3 center, Vector3 size, Transform parent, MovingPlatform.Motion motion, Vector3 travel)
+        {
+            GameObject go = Box(name, center, size, matTarget, parent);
+            GameObjectUtility.SetStaticEditorFlags(go, 0); // it moves
+            go.AddComponent<Rigidbody>().isKinematic = true;
+            var platform = go.AddComponent<MovingPlatform>();
+            platform.motion = motion;
+            platform.travel = travel;
+            platform.speed = 2f;
+            platform.degreesPerSecond = 25f;
         }
 
         /// <summary>A big label naming a group of tests, readable from the middle of the area.</summary>
@@ -517,6 +559,15 @@ namespace ShooterMashup.EditorTools
             var buggy = new GameObject("Hub buggy").AddComponent<VehicleShowcase>();
             buggy.buggyPosition = new Vector3(7f, 0f, -6f);
             buggy.buggyYaw = 90f;
+
+            // A flatbed truck driving in circles behind the spawn: jump on the back to ride it.
+            // Sit in it (F) to drive it yourself; when you get out it carries on circling.
+            var truck = new GameObject("Circling truck").AddComponent<VehicleShowcase>();
+            truck.design = VehicleShowcase.Design.Truck;
+            truck.autopilot = true;
+            truck.buggyPosition = new Vector3(0f, 0f, -30f);
+            truck.buggyYaw = 90f;
+            Label("circling truck:\njump on the back to ride it", new Vector3(0f, 4f, -18f), parent, 180f);
         }
 
         /// <summary>A portal at the hub to an area's arrival point, and one there back to the hub.</summary>

@@ -62,6 +62,8 @@ namespace ShooterMashup.Vehicles
         public int SeatId { get; private set; } = -1;
         /// <summary>Who's driving, or null (the vehicle then holds itself still).</summary>
         public VehicleDriver Driver { get; set; }
+        /// <summary>Driven by something other than a seated player (VehicleAutopilot), so it doesn't park itself.</summary>
+        public bool Autopilot { get; set; }
         public int WheelCount => wheels.Count;
         public int WheelsOnGround { get; private set; }
         public float Speed => body.linearVelocity.magnitude;
@@ -383,7 +385,7 @@ namespace ShooterMashup.Vehicles
             if (n == 0)
                 return;
 
-            bool driven = Driver != null;
+            bool driven = Driver != null || Autopilot;
             float throttleNow = driven ? throttle : 0f;
             bool braking = handbrake || !driven;
             steer = Mathf.MoveTowards(steer, driven ? steerInput : 0f, t.steerRate * dt);

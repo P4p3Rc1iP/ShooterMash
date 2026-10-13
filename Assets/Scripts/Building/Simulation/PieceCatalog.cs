@@ -396,10 +396,11 @@ namespace ShooterMashup.Building
         }
 
         /// <summary>
-        /// A 1 m wheel on a short mount, with its axle along x. Its one snap point is where it
-        /// attaches: on a beam's centre line, so the mount sits against the side of a beam running
-        /// along z, or just past the end of one running along x (an axle). The wheel is on the
-        /// +x side; turn it 180° for the other side of a vehicle.
+        /// A 1 m wheel on a short mount, with its axle along x. It snaps by two points: on a beam's
+        /// centre line, so the mount sits against the side of a beam running along z; and half a
+        /// beam further in, so it sits flush on the end of a beam running along x (an axle). The
+        /// wheel is on the +x side; turn it 180° for the other side of a vehicle. (Vehicle parts
+        /// are off the 1 m grid.)
         /// </summary>
         static PieceDef WheelPiece(string name)
         {
@@ -407,7 +408,7 @@ namespace ShooterMashup.Building
             float inner = Beam / 2f;
             var mountBox = new Obb(new Vector3(inner + mount / 2f, 0, 0), new Vector3(mount, mount, mount));
             var wheel = new WheelSpec(new Vector3(inner + mount + gap + width / 2f, 0, 0), radius, width, 40f);
-            return new PieceDef(name, new[] { mountBox }, new[] { Vector3.zero }).WithWheel(wheel);
+            return new PieceDef(name, new[] { mountBox }, new[] { Vector3.zero, new Vector3(inner, 0, 0) }).WithWheel(wheel);
         }
 
         /// <summary>

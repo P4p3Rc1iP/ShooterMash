@@ -33,6 +33,8 @@ namespace ShooterMashup.Player
 
         [Tooltip("Smooth rendering between simulation ticks.")]
         public bool interpolate = true;
+        [Tooltip("Ride moving things you stand on (vehicles, lifts, platforms): carried along, and keep their speed when you jump off.")]
+        public bool ridePlatforms = true;
 
         /// <summary>Raised for every movement event (footsteps, landings, jumps, steps...).</summary>
         public event Action<PmEvent> MoveEvent;
@@ -42,6 +44,8 @@ namespace ShooterMashup.Player
         public PlayerState PreviousState => previousState;
         public PlayerCmd LastCmd => lastCmd;
         public PlayerMove Simulation => pmove;
+        /// <summary>What the player is riding, or null.</summary>
+        public Transform Platform => rider.Platform;
         public float InterpolationAlpha { get; private set; } = 1f;
         public int TickMsec => Mathf.Max(1, Mathf.RoundToInt(1000f / tickRate));
         public MovePreset Preset => preset;
@@ -49,7 +53,8 @@ namespace ShooterMashup.Player
         public float SpawnYaw { get; set; }
 
         /// <summary>Interpolated simulation origin.</summary>
-        public Vector3 RenderOrigin => Vector3.LerpUnclamped(previousState.origin, state.origin, InterpolationAlpha);
+        /// (On a moving platform it's shifted to stay on the platform as drawn, which is interpolated too.)
+        public Vector3 RenderOrigin => Vector3.LerpUnclamped(previousState.origin, state.origin, InterpolationAlpha) + rider.RenderOffset;
 
         [SerializeField, HideInInspector] MovePreset appliedPreset = MovePreset.EtExact;
         PlayerState state;
@@ -59,6 +64,7 @@ namespace ShooterMashup.Player
         LocalPlayerInput input;
         int serverTime;
         double accumulatorMs;
+        readonly PlatformRider rider = new PlatformRider();
 
         void Awake()
         {
@@ -96,6 +102,7 @@ namespace ShooterMashup.Player
             state.viewAngles = new Vector2(0f, yaw);
             state.deltaAngles = new Vector2(-input.Pitch, yaw - input.Yaw);
             previousState = state;
+            rider.Clear();
             transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
         }
 
@@ -128,6 +135,10 @@ namespace ShooterMashup.Player
         void Update()
         {
             input.SampleFrame();
+
+            // Ride whatever moving thing we stand on (moved since last frame).
+            if (ridePlatforms)
+                rider.Carry(ref state, ref previousState, pmove.World, movement.mins, CurrentMaxs());
 
             int msec = TickMsec;
             accumulatorMs += Time.deltaTime * 1000.0;
@@ -162,8 +173,22 @@ namespace ShooterMashup.Player
                 }
             }
 
+            if (ridePlatforms)
+                rider.UpdateGround(ref state, pmove.GroundObject);
+            else
+                rider.Clear();
+
             InterpolationAlpha = interpolate ? (float)(accumulatorMs / msec) : 1f;
             transform.SetPositionAndRotation(RenderOrigin, Quaternion.Euler(0f, state.viewAngles.y, 0f));
+        }
+
+        /// <summary>The top of the hull for the current stance.</summary>
+        Vector3 CurrentMaxs()
+        {
+            Vector3 maxs = movement.maxs;
+            if (state.IsProne) maxs.y = movement.ProneMaxY;
+            else if (state.IsDucked) maxs.y = movement.CrouchMaxY;
+            return maxs;
         }
 
         void OnDrawGizmosSelected()

@@ -18,6 +18,12 @@ namespace ShooterMashup.Vehicles
         public Vector3 buggyPosition = new Vector3(64f, 0f, 14f);
         public float buggyYaw;
 
+        public enum Design { Buggy, Truck }
+        [Tooltip("Which vehicle to build.")]
+        public Design design = Design.Buggy;
+        [Tooltip("Drive it in circles while nobody sits in it (to practise riding on it).")]
+        public bool autopilot;
+
         public struct Placement
         {
             public string name;
@@ -29,8 +35,42 @@ namespace ShooterMashup.Vehicles
         void Start()
         {
             var structures = FindAnyObjectByType<StructureManager>();
-            if (structures != null)
-                Build(structures, buggyPosition, buggyYaw, BuggyPlan());
+            if (structures == null)
+                return;
+            Vehicle v = Build(structures, buggyPosition, buggyYaw, design == Design.Truck ? TruckPlan() : BuggyPlan());
+            if (v != null && autopilot)
+                v.gameObject.AddComponent<VehicleAutopilot>();
+        }
+
+        /// <summary>
+        /// A flatbed truck: two 3x3 floors on axle beams (6 m long, 3 m wide), a seat at the front
+        /// behind a cab wall of 1x1 walls, low rails and a tailgate round the bed, and a wheel on
+        /// each end of each axle (flush on the beam ends).
+        /// </summary>
+        public static List<Placement> TruckPlan()
+        {
+            const BuildMaterial wood = BuildMaterial.Wood;
+            float beam = PieceCatalog.BeamSize, deck = beam + 0.2f;   // floor top
+            var plan = new List<Placement>();
+            void Place(string name, Vector3 position, float yaw = 0f) =>
+                plan.Add(new Placement { name = name, material = wood, position = position, yaw = yaw });
+
+            Place("Beam 3 m", new Vector3(0, 0, -2.5f));                   // rear axle, along x
+            Place("Floor 3x3", new Vector3(0, beam, -1.5f));               // the bed
+            Place("Floor 3x3", new Vector3(0, beam, 1.5f));
+            Place("Beam 3 m", new Vector3(0, 0, 2.5f));                    // front axle
+            Place("Driver seat", new Vector3(0, deck, 2f));
+            foreach (float x in new[] { -1f, 0f, 1f })                     // cab wall behind the seat
+                Place("Wall 1x1", new Vector3(x, deck, 1.3f));
+            foreach (float x in new[] { -1.375f, 1.375f })                 // low rails along the bed
+                Place("Beam 3 m", new Vector3(x, deck, -1.5f), 90);
+            Place("Beam 3 m", new Vector3(0, deck, -2.875f));              // tailgate
+            foreach (float z in new[] { -2.5f, 2.5f })                     // wheels flush on the axle ends
+            {
+                Place("Wheel", new Vector3(1.5f - beam / 2f, beam / 2f, z));
+                Place("Wheel", new Vector3(-1.5f + beam / 2f, beam / 2f, z), 180);
+            }
+            return plan;
         }
 
         /// <summary>Builds a vehicle on a temporary lift and drops it. Returns the vehicle (or null).</summary>

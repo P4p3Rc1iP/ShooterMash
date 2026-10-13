@@ -234,6 +234,101 @@ namespace ShooterMashup.Player.Tests
             Assert.AreEqual(1, events.Count(e => e.type == PmEventType.Jump));
         }
 
+        // ------------------------------------------------------------------ moving platforms
+
+        /// <summary>A 4 x 4 m platform with its top at 1 m, centred above x = 0, z = 5, with a rigidbody.</summary>
+        GameObject PlatformUnderfoot()
+        {
+            GameObject platform = Box(new Vector3(0f, 0.75f, 5f), new Vector3(4f, 0.5f, 4f));
+            var body = platform.AddComponent<Rigidbody>();
+            body.isKinematic = true;
+            body.useGravity = false;
+            return platform;
+        }
+
+        /// <summary>Stand on the platform, 1 m off its middle, and let the rider see it.</summary>
+        PlatformRider StandOn(GameObject platform, Vector3 platformVelocity = default)
+        {
+            Spawn(new Vector3(1f, 1f + StandOriginY, 5f));
+            Settle();
+            // Physics doesn't run in edit-mode tests, so the platform says how fast it moves.
+            var rider = new PlatformRider((t, p) => platformVelocity);
+            rider.UpdateGround(ref st, pmove.GroundObject);
+            st.velocity = Vector3.zero; // standing still on it (it doesn't really move here)
+            Assert.AreEqual(platform.transform, rider.Platform, "riding the platform");
+            return rider;
+        }
+
+        void Carry(PlatformRider rider)
+        {
+            Physics.SyncTransforms();
+            PlayerState previous = st;
+            rider.Carry(ref st, ref previous, pmove.World, cfg.mins, cfg.maxs);
+        }
+
+        [Test]
+        public void Platform_CarriesThePlayer()
+        {
+            GameObject platform = PlatformUnderfoot();
+            PlatformRider rider = StandOn(platform);
+            Vector3 before = Pos;
+            platform.transform.position += new Vector3(2f, 0.5f, -1f);
+            Carry(rider);
+            AssertNear(before + new Vector3(2f, 0.5f, -1f), Pos);
+        }
+
+        [Test]
+        public void TurningPlatform_TurnsThePlayerAndTheView()
+        {
+            GameObject platform = PlatformUnderfoot();
+            PlatformRider rider = StandOn(platform);
+            float yaw = st.deltaAngles.y;
+            platform.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+            Carry(rider);
+            // 1 m east of the middle, turned 90° right about it: 1 m south of the middle.
+            AssertNear(new Vector3(0f, 1f + StandOriginY, 4f), Pos);
+            Assert.AreEqual(yaw + 90f, st.deltaAngles.y, 0.01f);
+        }
+
+        [Test]
+        public void JumpingOff_KeepsThePlatformsSpeed_LandingLosesIt()
+        {
+            GameObject platform = PlatformUnderfoot();
+            PlatformRider rider = StandOn(platform, new Vector3(5f, 0f, 0f));
+
+            Run(Tick, up: 127);
+            Assert.IsFalse(st.onGround);
+            rider.UpdateGround(ref st, pmove.GroundObject);
+            Assert.AreEqual(5f, st.velocity.x, 0.01f, "jumped off at the platform's speed");
+            Assert.IsNull(rider.Platform);
+
+            // Coming down onto it (it's moving at 5 m/s, and so are we): from then on we move
+            // relative to it, and it carries us.
+            Spawn(new Vector3(-1f, 3f, 5f));
+            st.velocity = new Vector3(5f, 0f, 0f);
+            for (int t = 0; t < 1500 && !st.onGround; t += Tick)
+                Run(Tick);
+            Assert.IsTrue(st.onGround, "landed");
+            Assert.AreEqual(platform.GetComponent<Collider>(), pmove.GroundObject, "on the platform");
+            float before = st.velocity.x;
+            rider.UpdateGround(ref st, pmove.GroundObject);
+            Assert.AreEqual(before - 5f, st.velocity.x, 0.01f, "moving relative to the platform again");
+            Assert.AreEqual(platform.transform, rider.Platform);
+        }
+
+        [Test]
+        public void StaticGround_IsNotAPlatform()
+        {
+            SpawnOnFloor();
+            Settle();
+            var rider = new PlatformRider();
+            rider.UpdateGround(ref st, pmove.GroundObject);
+            Assert.IsNull(rider.Platform);
+        }
+
+        static void AssertNear(Vector3 expected, Vector3 actual, float tolerance = 0.01f) =>
+            Assert.Less(Vector3.Distance(expected, actual), tolerance, $"expected {expected}, got {actual}");
+
         // ------------------------------------------------------------------ stamina
 
         [Test]

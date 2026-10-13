@@ -91,7 +91,11 @@ namespace ShooterMashup.Player
             }
 
             state = ps;
+            GroundObject = ps.onGround ? groundTrace.hitObject : null;
         }
+
+        /// <summary>What the player stood on after the last Move (the world's collider), or null in the air.</summary>
+        public object GroundObject { get; private set; }
 
         void MoveSingle()
         {

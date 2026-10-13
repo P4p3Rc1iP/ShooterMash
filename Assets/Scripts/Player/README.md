@@ -33,12 +33,15 @@ World/        Collision back-end
   UnityPmoveWorld.cs   IPmoveWorld on Unity physics (axis-aligned box sweeps)
   PmSurface.cs         ladder / slick / no-damage / footstep material on a collider
   LiquidVolume.cs      water, slime or lava trigger volumes
+  MovingPlatform.cs    a scripted platform (elevator, slider, carousel) and IMovingPlatform
+  Portal.cs            walk-through teleport (test map)
 Runtime/      Unity glue for a local player
   LocalPlayerInput.cs  keyboard + mouse -> PlayerCmd (ET mouse scale: sensitivity * 0.022)
   PlayerMotor.cs       fixed-tick loop (default 125 Hz), render interpolation, events
   PlayerView.cs        camera: view height, bob, step/stance smoothing, landing dip, lean, FOV
   PlayerVitals.cs      placeholder health for fall damage
   PlayerDebugHud.cs    speedometer, stamina, debug keys
+  PlatformRider.cs     riding moving things you stand on (vehicles, lifts, platforms)
 ```
 
 ## Things to know
@@ -81,6 +84,9 @@ Runtime/      Unity glue for a local player
 - `CorrectAllSolid` actually moves you out of solids (ET's version never moves the player),
   with a PhysX depenetration fallback. Players will get stuck in freshly placed voxels.
 - Mouse look is applied every rendered frame and the body is interpolated between ticks.
+- You ride moving platforms (anything with a Rigidbody: vehicles, lifts, `MovingPlatform`s):
+  `PlatformRider` carries and turns you with it each frame and hands over its velocity when you
+  jump off or land. ET only had brush movers pushing you; this is outside the deterministic step.
 - The prone key is edge-triggered (one press = one toggle).
 - Stepping up rises only as far as there's headroom (Quake 3's later `PM_StepSlideMove`), and
   if a ceiling starting right above the step blocks the full-height step, lower steps are

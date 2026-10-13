@@ -77,6 +77,19 @@ namespace ShooterMashup.Vehicles.Tests
         }
 
         [Test]
+        public void DemoTruck_Builds()
+        {
+            foreach (VehicleShowcase.Placement p in VehicleShowcase.TruckPlan())
+            {
+                BuildResult r = sys.Execute(BuildCmd.Place(VehicleShowcase.Owner, Type(p.name), p.material, p.position, Quaternion.Euler(0, p.yaw, 0), 100));
+                Assert.IsTrue(r.Ok, $"{p.name} at {p.position}: {r.failure}");
+                if (world.Anchor == null)
+                    world.Anchor = sys.Get(r.added[0]).boxes;
+            }
+            Assert.AreEqual(4, sys.Pieces.Values.Count(p => p.def.Wheel != null));
+        }
+
+        [Test]
         public void DemoBuggy_Builds()
         {
             foreach (VehicleShowcase.Placement p in VehicleShowcase.BuggyPlan())

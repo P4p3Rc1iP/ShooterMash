@@ -74,8 +74,10 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
 
 ## Known gaps and next steps
 
-- **Players don't ride along.** The player controller has no moving-platform support: standing on
-  a moving vehicle, you slide off. Needed for boyz on the back of a trukk; the next big piece.
+- **Riding** works (see the player controller's `PlatformRider`): stand on a vehicle and you're
+  carried along; jump and you keep its speed. A truck circles behind the spawn hub to try it
+  (`VehicleAutopilot`; sit in it to drive it yourself). Jumping on from a standstill makes you
+  slide back relative to the truck, as it should; run alongside and you land cleanly.
 - **Multiplayer:** planned as driver authority: the driver's machine runs the vehicle's physics
   and others see a smoothed copy. Rigid-body physics can't be predicted like player movement.
 - One wheel size, one seat, no engines or fuel; every vehicle accelerates alike.
