@@ -192,6 +192,10 @@ Agreed with the owner:
   copying `Assets` again, rebuild the test map in the copy first: script GUIDs in the copied
   `.meta` files differ from the copy's old scene.
 - Test map: menu **ShooterMashup > Build Movement Test Map** regenerates
-  `Assets/Scenes/MovementTest.unity` (stairs, ramps, crates, tunnels, ladders, fall towers,
-  water and slime tanks, slick floor, strafe lane, a building area with diggable dirt and bridge cliffs,
-  a demo buggy and a rough vehicle test track).
+  `Assets/Scenes/MovementTest.unity`. You spawn at a hub at the origin with a buggy and three
+  portals (walk through; each area has one back) and roads to three areas, each built in its
+  own space: **character tests** (z +170: stairs, ramps, crates, tunnels, ladders, fall towers,
+  water and slime tanks, slick floor, lean corner, strafe lane), **building** (x -190: the
+  showcase, diggable dirt, bridge cliffs; the StructureManager stays at the world origin and the
+  showcase gets world corners), and **driving** (x +190: the rough test track and a closed race
+  circuit with a table-top jump, laid out from straights and arcs so it always closes).

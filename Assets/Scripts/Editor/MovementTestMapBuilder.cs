@@ -22,7 +22,18 @@ namespace ShooterMashup.EditorTools
         const string ArtFolder = "Assets/Art/Dev";
         const string MeshAssetPath = ArtFolder + "/MovementTestMeshes.asset";
 
+        // The hub (spawn, a buggy, portals) is at the origin; the areas are a short drive away.
+        static readonly Vector3 CharacterArea = new Vector3(0f, 0f, 170f);
+        static readonly Vector3 BuildingArea = new Vector3(-190f, 0f, 0f);
+        static readonly Vector3 DrivingArea = new Vector3(190f, 0f, 0f);
+        // Where you arrive (feet) and which way you face, by portal or road.
+        static readonly Vector3 HubArrival = new Vector3(0f, 0f, -4f);
+        static readonly (Vector3 at, float yaw) CharacterArrival = (new Vector3(0f, 0f, 120f), 0f);
+        static readonly (Vector3 at, float yaw) BuildingArrival = (new Vector3(-135f, 0f, 18f), 0f);
+        static readonly (Vector3 at, float yaw) DrivingArrival = (new Vector3(108f, 0f, 0f), 90f);
+
         static Transform root;
+        static Transform area;   // the area being built; groups go under it
         static Object meshContainer;
         static readonly Dictionary<string, Mesh> MeshCache = new Dictionary<string, Mesh>();
         static Material matFloor, matWall, matTrim, matLadder, matSlick, matWater, matSlime, matTarget, matDirt;
@@ -54,8 +65,10 @@ namespace ShooterMashup.EditorTools
             BuildLighting();
 
             // Ground.
-            Box("Floor", new Vector3(0, -0.4f, 0), new Vector3(160, 0.8f, 160), matFloor);
+            Box("Floor", new Vector3(0, -0.4f, 0), new Vector3(560, 0.8f, 560), matFloor);
 
+            // Three test areas around a hub at the origin, each in its own space.
+            area = Area("Character tests", CharacterArea);
             BuildStairs(new Vector3(-29, 0, 8));
             BuildRamps(new Vector3(11, 0, 8));
             BuildJumpCrates(new Vector3(-6, 0, 13));
@@ -67,11 +80,19 @@ namespace ShooterMashup.EditorTools
             BuildLeanCorner(new Vector3(-33, 0, -8));
             BuildSlickFloor(new Vector3(28, 0, -5));
             BuildStrafeLane(-38);
-            BuildVehicleTrack(new Vector3(58f, 0f, -56f), -90f);
+
+            area = Area("Building", BuildingArea);
             BuildBuildingArea(new Vector3(56, 0, 8));
 
-            // Spawn in front of the building showcase, facing it (+z).
-            BuildPlayer(new Vector3(55, 0.65f, 12));
+            area = Area("Driving", DrivingArea);
+            BuildVehicleTrack(new Vector3(-70f, 0f, -60f), 0f);
+            BuildRaceTrack(new Vector3(-30f, 0f, -55f));
+
+            area = Area("Hub", Vector3.zero);
+            BuildHub();
+            area = null;
+
+            BuildPlayer(HubArrival + new Vector3(0, 0.65f, 0));
 
             AssetDatabase.SaveAssets();
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -349,6 +370,183 @@ namespace ShooterMashup.EditorTools
         }
 
 
+        /// <summary>
+        /// A closed race circuit, 12 m wide between red and grey kerb barriers, starting at `start`
+        /// heading +x: a straight with a table-top jump (6 m wide in the middle, so you can go round
+        /// it), a wide sweeper, a chicane, a tight bend, an S-bend, and two corners back to the
+        /// start. It's driven anticlockwise. Built from straights and arcs; the last straight
+        /// lengths are worked out so the loop always closes.
+        /// </summary>
+        static void BuildRaceTrack(Vector3 start)
+        {
+            var parent = Group("Race track");
+            parent.localPosition = start;
+            var track = new TrackBuilder(parent, 12f);
+            Label("race track\nstart / finish", new Vector3(0f, 4f, 9f), parent, 90f);
+            Box("Start line", new Vector3(1f, 0.01f, 0f), new Vector3(1f, 0.02f, 12f), matSlick, parent);
+
+            track.Straight(25f);
+            // The jump: in the straight's own space (forward is the track direction).
+            var jump = new GameObject("Jump").transform;
+            jump.SetParent(parent, false);
+            jump.SetLocalPositionAndRotation(track.Position, Quaternion.LookRotation(track.Direction));
+            // A table top: up, 8 m flat at 1 m, down. Fast jumps clear the top, slow ones land on it.
+            float z = Slope(jump, "Jump ramp", 0f, 15f, 1f, 6f, 0.3f, matTarget);
+            Box("Jump table", new Vector3(0f, 0.5f, z + 4f), new Vector3(6f, 1f, 8f), matTrim, jump);
+            Slope(jump, "Landing ramp", z + 8f, -15f, 1f, 6f, 0.3f, matWall);
+            Label("jump", new Vector3(0f, 3f, 0f), jump, 0f);
+            track.Straight(35f);
+
+            track.Arc(25f, 90f);                  // wide sweeper, left
+            track.Straight(15f);
+            track.Arc(15f, -35f);                 // chicane: right, left, right
+            track.Arc(15f, 70f);
+            track.Arc(15f, -35f);
+            track.Straight(10f);
+            track.Arc(10f, 90f);                  // tight left
+            track.Arc(15f, -40f);                 // S-bend: right, then left
+            track.Arc(15f, 40f);
+
+            // Heading back along -x now. Two 20 m corners close the loop; the straights between
+            // them make up the rest.
+            Vector3 q = track.Position;
+            float across = q.x, down = q.z - 40f;
+            if (across < 0f || down < 0f)
+                Debug.LogError($"Race track doesn't close: {across}, {down}");
+            track.Straight(across);
+            track.Arc(20f, 90f);
+            track.Straight(down);
+            track.Arc(20f, 90f);
+        }
+
+        /// <summary>Lays out a track like a turtle, with kerb barriers along both edges.</summary>
+        sealed class TrackBuilder
+        {
+            const float SampleSpacing = 2f, KerbHeight = 0.6f, KerbThickness = 0.6f;
+
+            readonly Transform parent;
+            readonly float halfWidth;
+            float heading;          // degrees from +x towards +z
+            int kerbs;
+
+            public Vector3 Position { get; private set; }
+            public Vector3 Direction => new Vector3(Mathf.Cos(heading * Mathf.Deg2Rad), 0f, Mathf.Sin(heading * Mathf.Deg2Rad));
+            Vector3 Left => new Vector3(-Mathf.Sin(heading * Mathf.Deg2Rad), 0f, Mathf.Cos(heading * Mathf.Deg2Rad));
+
+            public TrackBuilder(Transform parent, float width)
+            {
+                this.parent = parent;
+                halfWidth = width / 2f;
+            }
+
+            public void Straight(float length)
+            {
+                int steps = Mathf.Max(1, Mathf.CeilToInt(length / SampleSpacing));
+                Vector3 from = Position, dir = Direction, left = Left;
+                for (int i = 0; i < steps; i++)
+                    Kerbs(from + dir * (length * i / steps), from + dir * (length * (i + 1) / steps), left, left);
+                Position = from + dir * length;
+            }
+
+            /// <summary>A bend of `degrees` (positive: left) on a centre line of `radius`.</summary>
+            public void Arc(float radius, float degrees)
+            {
+                float sign = Mathf.Sign(degrees);
+                Vector3 center = Position + Left * (radius * sign);
+                float startHeading = heading;
+                int steps = Mathf.Max(2, Mathf.CeilToInt(radius * Mathf.Abs(degrees) * Mathf.Deg2Rad / SampleSpacing));
+                Vector3 previous = Position, previousLeft = Left;
+                for (int i = 1; i <= steps; i++)
+                {
+                    heading = startHeading + degrees * i / steps;
+                    Vector3 p = center - Left * (radius * sign);
+                    Kerbs(previous, p, previousLeft, Left);
+                    previous = p;
+                    previousLeft = Left;
+                }
+                Position = previous;
+            }
+
+            void Kerbs(Vector3 a, Vector3 b, Vector3 leftA, Vector3 leftB)
+            {
+                float offset = halfWidth + KerbThickness / 2f;
+                foreach (float side in new[] { 1f, -1f })
+                {
+                    Vector3 p = a + leftA * (offset * side), q = b + leftB * (offset * side);
+                    Vector3 d = q - p;
+                    if (d.sqrMagnitude < 1e-4f)
+                        continue;
+                    Box("Kerb", (p + q) / 2f + Vector3.up * (KerbHeight / 2f), new Vector3(KerbThickness, KerbHeight, d.magnitude + 0.1f),
+                        kerbs % 2 == 0 ? matTarget : matTrim, parent, Quaternion.LookRotation(d));
+                }
+                kerbs++;
+            }
+        }
+
+        /// <summary>
+        /// The hub at the origin: where you spawn, with a buggy to drive and a portal to each area
+        /// (walk through it). Roads lead out to the areas, which each have a portal back.
+        /// </summary>
+        static void BuildHub()
+        {
+            var parent = Group("Hub");
+            Label("ShooterMash test map\nwalk through a portal, or take the buggy (F)", new Vector3(0f, 5.5f, 9f), parent);
+
+            PortalPair("Building", new Vector3(-6f, 0f, 5f), -45f, BuildingArrival, parent, matDirt);
+            PortalPair("Character tests", new Vector3(0f, 0f, 7f), 0f, CharacterArrival, parent, matSlick);
+            PortalPair("Driving", new Vector3(6f, 0f, 5f), 45f, DrivingArrival, parent, matTarget);
+
+            // Roads to the areas, for driving there.
+            Road(new Vector3(0f, 0f, 10f), CharacterArrival.at, parent);
+            Road(new Vector3(-8f, 0f, 0f), BuildingArrival.at, parent);
+            Road(new Vector3(8f, 0f, 0f), DrivingArrival.at, parent);
+
+            // A buggy to drive, facing the road to the driving area.
+            var buggy = new GameObject("Hub buggy").AddComponent<VehicleShowcase>();
+            buggy.buggyPosition = new Vector3(7f, 0f, -6f);
+            buggy.buggyYaw = 90f;
+        }
+
+        /// <summary>A portal at the hub to an area's arrival point, and one there back to the hub.</summary>
+        static void PortalPair(string name, Vector3 at, float yaw, (Vector3 at, float yaw) arrival, Transform parent, Material frame)
+        {
+            PortalGate(name, at, yaw, arrival.at, arrival.yaw, parent, frame);
+            Label(name, at + new Vector3(0f, 3.6f, 0f), parent, yaw);
+            // The way back stands 7 m to the left of where you arrive (clear of the road).
+            Quaternion facing = Quaternion.Euler(0f, arrival.yaw, 0f);
+            Vector3 back = arrival.at + facing * Vector3.left * 7f;
+            var areaParent = Group(name + " portal back");
+            areaParent.SetParent(root, false);
+            PortalGate("Back to the hub", back, arrival.yaw, HubArrival, 0f, areaParent, frame);
+            Label("back to the hub", back + new Vector3(0f, 3.6f, 0f), areaParent, arrival.yaw + 180f);
+        }
+
+        static void PortalGate(string name, Vector3 at, float yaw, Vector3 destination, float destinationYaw, Transform parent, Material frame)
+        {
+            var gate = new GameObject("Portal " + name).transform;
+            gate.SetParent(parent, false);
+            gate.SetLocalPositionAndRotation(at, Quaternion.Euler(0f, yaw, 0f));
+            foreach (float x in new[] { -1.5f, 1.5f })
+                Box("Post", new Vector3(x, 1.5f, 0f), new Vector3(0.4f, 3f, 0.4f), frame, gate);
+            Box("Lintel", new Vector3(0f, 3.2f, 0f), new Vector3(3.4f, 0.4f, 0.4f), frame, gate);
+            GameObject sheet = Box("Sheet", new Vector3(0f, 1.5f, 0f), new Vector3(2.6f, 3f, 0.05f), matWater, gate);
+            Object.DestroyImmediate(sheet.GetComponent<BoxCollider>()); // walk-through
+            sheet.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
+            GameObjectUtility.SetStaticEditorFlags(sheet, 0);
+            var portal = gate.gameObject.AddComponent<Portal>();
+            portal.destination = destination;
+            portal.destinationYaw = destinationYaw;
+            portal.size = new Vector3(2.6f, 3f, 0.8f);
+        }
+
+        /// <summary>A flat strip on the ground from one point to another (world), to follow by car.</summary>
+        static void Road(Vector3 from, Vector3 to, Transform parent)
+        {
+            Vector3 d = to - from;
+            d.y = 0f;
+            Box("Road", (from + to) / 2f + Vector3.up * 0.01f, new Vector3(6f, 0.02f, d.magnitude), matTrim, parent, Quaternion.LookRotation(d));
+        }
+
         static void BuildBuildingArea(Vector3 at)
         {
             var parent = Group("Building area");
@@ -358,20 +556,17 @@ namespace ShooterMashup.EditorTools
             var structures = new GameObject("Structures");
             structures.AddComponent<StructureManager>();
 
-            // Example structures, built from real pieces when play starts.
+            // Example structures, built from real pieces when play starts. The StructureManager stays
+            // at the world origin (piece records are world positions), so the showcase is moved
+            // into this area by giving it world corners; everything else here is in the area's space.
             var showcase = structures.AddComponent<BuildShowcase>();
-            showcase.farmCorner = BuildShowcase.DefaultFarm;
-            showcase.barnCorner = BuildShowcase.DefaultBarn;
-            showcase.towerCorner = BuildShowcase.DefaultTower;
+            showcase.farmCorner = BuildShowcase.DefaultFarm + BuildingArea;
+            showcase.barnCorner = BuildShowcase.DefaultBarn + BuildingArea;
+            showcase.towerCorner = BuildShowcase.DefaultTower + BuildingArea;
             Label("farmstead\n45° roofs", BuildShowcase.DefaultFarm + new Vector3(4.5f, 9f, -4f), parent);
             Label("barn\n27° roofs", BuildShowcase.DefaultBarn + new Vector3(4.5f, 8.5f, -4f), parent);
             Label("watchtower\n63° roof",BuildShowcase.DefaultTower + new Vector3(1.5f, 16.5f, -1f), parent);
-
-            // A demo buggy to drive (F on its seat), and how vehicles are built.
-            var buggy = new GameObject("Vehicle showcase").AddComponent<VehicleShowcase>();
-            buggy.buggyPosition = new Vector3(63f, 0f, 13f);
-            buggy.buggyYaw = 180f; // facing the open ground to the south
-            Label("buggy: F on the seat to drive\nL lift tool, B to build on a lift", new Vector3(63f, 3f, 10.5f), parent);
+            Label("vehicles: L lift tool,\nB to build on the lift", new Vector3(63f, 3f, 10.5f), parent);
 
             // Diggable ground: a 1 m thick pad of blocks standing in for voxel terrain.
             Vector3 pad = new Vector3(at.x - 4f, 0f, at.z - 16f); // corner
@@ -446,7 +641,15 @@ namespace ShooterMashup.EditorTools
         static Transform Group(string name)
         {
             var t = new GameObject(name).transform;
+            t.SetParent(area != null ? area : root, false);
+            return t;
+        }
+
+        static Transform Area(string name, Vector3 origin)
+        {
+            var t = new GameObject(name).transform;
             t.SetParent(root, false);
+            t.localPosition = origin;
             return t;
         }
 

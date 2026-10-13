@@ -5,8 +5,8 @@ that support goes. Structures only for now; vehicles come later.
 
 ## Try it
 
-Rebuild the test map (`ShooterMashup > Build Movement Test Map`); you spawn in front of the
-building area (around x = 56). Press **B** to take out the build tool. Three structures are
+Rebuild the test map (`ShooterMashup > Build Movement Test Map`) and walk through the brown
+**Building** portal at the spawn hub (or drive the buggy down the west road). Press **B** to take out the build tool. Three structures are
 built there from real pieces when play starts (`BuildShowcase`): a farmstead (45° roofs), a
 timber-frame barn (27°) and a watchtower (63°), each with a cottage roofed in 1 m pieces.
 Together they use every piece in every material it comes in; a test checks that, and that they

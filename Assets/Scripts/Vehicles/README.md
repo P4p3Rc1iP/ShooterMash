@@ -5,8 +5,10 @@ driving model takes after Trailmakers, where whatever you build drives decently.
 
 ## Try it
 
-Rebuild the test map and press Play. A demo buggy stands to the right of the spawn. A rough test
-track (washboard, side ridges, dunes, a jump, rocks) runs west from x = 58, z = -56, past the strafe lane.
+Rebuild the test map and press Play. A buggy stands to the right of the spawn hub, facing the
+road east to the **driving area** (or walk through the red portal). There: a rough test track
+(washboard, side ridges, dunes, a gap jump, rocks) and a closed race circuit (a sweeper, a
+chicane, a tight bend, an S-bend and a table-top jump).
 
 | Input | Action |
 | --- | --- |
