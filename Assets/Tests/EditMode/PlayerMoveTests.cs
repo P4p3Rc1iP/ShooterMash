@@ -201,6 +201,29 @@ namespace ShooterMashup.Player.Tests
             Assert.Less(st.stamina, 1f);
         }
 
+        [TestCase(MovePreset.ShooterMash, true)]
+        [TestCase(MovePreset.EtExact, false)]
+        public void LandingEarlyOnANewPiece_JumpAgain(MovePreset preset, bool canJump)
+        {
+            // Jump, have a 0.5 m slab appear under you on the way up (building under yourself),
+            // land on it early, and press jump again straight away. ET's cooldown counts 850 ms
+            // from the jump, so it refuses; ShooterMash has none.
+            MovePresets.Apply(cfg, preset);
+            Spawn(new Vector3(0f, -cfg.mins.y, 0f));
+            Settle();
+            Run(Tick, up: 127);
+            Run(240);
+            Box(new Vector3(0f, 0.25f, 0f), new Vector3(3f, 0.5f, 3f));
+            for (int t = 0; t < 1000 && !st.onGround; t += Tick)
+                Run(Tick);
+            Assert.IsTrue(st.onGround, "should have landed on the slab");
+            Assert.AreEqual(0.5f, Pos.y + cfg.mins.y, 0.01f, "on top of it");
+
+            events.Clear();
+            Run(2 * Tick, up: 127);
+            Assert.AreEqual(canJump, events.Any(e => e.type == PmEventType.Jump));
+        }
+
         [Test]
         public void HoldingJump_OnlyJumpsOnce()
         {

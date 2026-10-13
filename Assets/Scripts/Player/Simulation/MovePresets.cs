@@ -48,6 +48,7 @@ namespace ShooterMashup.Player
             c.speed = 8.128f;                                        // run 6.50, sprint 8.94 m/s
             c.gravity = 20.32f;
             c.jumpVelocity = 6.858f;                                 // 1.157 m jump
+            c.jumpCooldownMs = 850;                                  // anti-bunnyhop: counted from the jump
             c.stopSpeed = 2.54f;
 
             c.staminaDrainPerSecond = 0.25f;                         // a full bar lasts 4 s of sprint
@@ -85,6 +86,7 @@ namespace ShooterMashup.Player
             c.speed = 8f;                                            // run 6.4, sprint 8.8 m/s
             c.gravity = 20f;
             c.jumpVelocity = 6.8f;                                   // 1.156 m jump
+            c.jumpCooldownMs = 0;                                    // jump again as soon as you land (you still have to re-press)
             c.stopSpeed = 2.5f;
 
             c.staminaDrainPerSecond = 0.1f;                          // more forgiving: 10 s of sprint

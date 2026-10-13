@@ -52,7 +52,9 @@ Runtime/      Unity glue for a local player
   6.4 m/s run, 20 m/s² gravity, fall damage from
   6 m...) plus changes for building: 0.52 m steps (so 50 cm steps can be run up) and a 0.6 m
   prone hull that fits under a floor on 1 m pillars. Stamina is more forgiving: a full bar
-  lasts 10 s of sprint (ET: 4 s) and refills twice as fast. *ET exact* is the original, for comparison.
+  lasts 10 s of sprint (ET: 4 s) and refills twice as fast. There's no jump cooldown (ET waits 850 ms
+  from one jump to the next, so landing early, e.g. on a piece built under you mid-jump, left you
+  unable to jump); you still release and press jump for each jump. *ET exact* is the original, for comparison.
   Picking one overwrites those values in `movement`; see `MovePresets.cs`.
   (ET's prone hull is 1.02 m, taller than its eyes; `MoveConfig.proneHeight` sets it separately.)
 - **The transform is the simulation origin**, 0.61 m above the feet, as in ET.
