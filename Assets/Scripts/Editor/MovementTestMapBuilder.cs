@@ -29,7 +29,11 @@ namespace ShooterMashup.EditorTools
         // Where you arrive (feet) and which way you face, by portal or road.
         static readonly Vector3 HubArrival = new Vector3(0f, 0f, -4f);
         static readonly (Vector3 at, float yaw) CharacterArrival = (new Vector3(0f, 0f, 120f), 0f);
-        static readonly (Vector3 at, float yaw) BuildingArrival = (new Vector3(-135f, 0f, 18f), 0f);
+        static readonly (Vector3 at, float yaw) BuildingArrival = (new Vector3(-134f, 0f, -18f), 0f);
+        // The showcase structures in the building area's space, spread out with room between them.
+        static readonly Vector3 FarmCorner = new Vector3(34f, 0f, 24f);
+        static readonly Vector3 BarnCorner = new Vector3(60f, 0f, 24f);
+        static readonly Vector3 TowerCorner = new Vector3(84f, 0f, 44f);
         static readonly (Vector3 at, float yaw) DrivingArrival = (new Vector3(108f, 0f, 0f), 90f);
 
         static Transform root;
@@ -371,7 +375,7 @@ namespace ShooterMashup.EditorTools
 
 
         /// <summary>
-        /// A closed race circuit, 12 m wide between red and grey kerb barriers, starting at `start`
+        /// A closed race circuit, 12 m wide between flat red and grey kerbs, starting at `start`
         /// heading +x: a straight with a table-top jump (6 m wide in the middle, so you can go round
         /// it), a wide sweeper, a chicane, a tight bend, an S-bend, and two corners back to the
         /// start. It's driven anticlockwise. Built from straights and arcs; the last straight
@@ -419,10 +423,13 @@ namespace ShooterMashup.EditorTools
             track.Arc(20f, 90f);
         }
 
-        /// <summary>Lays out a track like a turtle, with kerb barriers along both edges.</summary>
+        /// <summary>
+        /// Lays out a track like a turtle, with painted kerbs along both edges: flat enough to
+        /// drive over, so the track is a suggestion of turns rather than a channel you're stuck in.
+        /// </summary>
         sealed class TrackBuilder
         {
-            const float SampleSpacing = 2f, KerbHeight = 0.6f, KerbThickness = 0.6f;
+            const float SampleSpacing = 2f, KerbHeight = 0.06f, KerbThickness = 1f;
 
             readonly Transform parent;
             readonly float halfWidth;
@@ -550,7 +557,7 @@ namespace ShooterMashup.EditorTools
         static void BuildBuildingArea(Vector3 at)
         {
             var parent = Group("Building area");
-            Label("building area\nB: build tool", new Vector3(at.x, 4f, at.z - 22f), parent);
+            Label("building area\nB: build tool", new Vector3(at.x, 5f, at.z - 12f), parent);
 
             // Owns all placed pieces.
             var structures = new GameObject("Structures");
@@ -560,13 +567,13 @@ namespace ShooterMashup.EditorTools
             // at the world origin (piece records are world positions), so the showcase is moved
             // into this area by giving it world corners; everything else here is in the area's space.
             var showcase = structures.AddComponent<BuildShowcase>();
-            showcase.farmCorner = BuildShowcase.DefaultFarm + BuildingArea;
-            showcase.barnCorner = BuildShowcase.DefaultBarn + BuildingArea;
-            showcase.towerCorner = BuildShowcase.DefaultTower + BuildingArea;
-            Label("farmstead\n45° roofs", BuildShowcase.DefaultFarm + new Vector3(4.5f, 9f, -4f), parent);
-            Label("barn\n27° roofs", BuildShowcase.DefaultBarn + new Vector3(4.5f, 8.5f, -4f), parent);
-            Label("watchtower\n63° roof",BuildShowcase.DefaultTower + new Vector3(1.5f, 16.5f, -1f), parent);
-            Label("vehicles: L lift tool,\nB to build on the lift", new Vector3(63f, 3f, 10.5f), parent);
+            showcase.farmCorner = FarmCorner + BuildingArea;
+            showcase.barnCorner = BarnCorner + BuildingArea;
+            showcase.towerCorner = TowerCorner + BuildingArea;
+            Label("farmstead\n45° roofs", FarmCorner + new Vector3(4.5f, 9f, -4f), parent);
+            Label("barn\n27° roofs", BarnCorner + new Vector3(4.5f, 8.5f, -4f), parent);
+            Label("watchtower\n63° roof",TowerCorner + new Vector3(1.5f, 16.5f, -1f), parent);
+            Label("vehicles: L lift tool,\nB to build on the lift", new Vector3(78f, 3f, 8f), parent);
 
             // Diggable ground: a 1 m thick pad of blocks standing in for voxel terrain.
             Vector3 pad = new Vector3(at.x - 4f, 0f, at.z - 16f); // corner
