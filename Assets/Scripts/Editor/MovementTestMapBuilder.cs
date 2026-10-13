@@ -284,14 +284,14 @@ namespace ShooterMashup.EditorTools
             var structures = new GameObject("Structures");
             structures.AddComponent<StructureManager>();
 
-            // Two example structures, built from real pieces when play starts.
+            // Example structures, built from real pieces when play starts.
             var showcase = structures.AddComponent<BuildShowcase>();
-            showcase.houseCorner = new Vector3(48f, 0f, 20f);
-            showcase.pavilionCorner = new Vector3(48f, 0f, 35f);
-            showcase.towerCorner = new Vector3(61f, 0f, 24f);
-            Label("house", new Vector3(52.5f, 8f, 18.5f), parent);
-            Label("pavilion", new Vector3(52.5f, 8.5f, 32f), parent);
-            Label("lookout tower", new Vector3(62.5f, 11.5f, 22.5f), parent);
+            showcase.farmCorner = BuildShowcase.DefaultFarm;
+            showcase.barnCorner = BuildShowcase.DefaultBarn;
+            showcase.towerCorner = BuildShowcase.DefaultTower;
+            Label("farmstead\n45° roofs", BuildShowcase.DefaultFarm + new Vector3(4.5f, 9f, -4f), parent);
+            Label("barn\n27° roofs", BuildShowcase.DefaultBarn + new Vector3(4.5f, 8.5f, -4f), parent);
+            Label("watchtower\n63° roof",BuildShowcase.DefaultTower + new Vector3(1.5f, 16.5f, -1f), parent);
 
             // Diggable ground: a 1 m thick pad of blocks standing in for voxel terrain.
             Vector3 pad = new Vector3(at.x - 4f, 0f, at.z - 16f); // corner

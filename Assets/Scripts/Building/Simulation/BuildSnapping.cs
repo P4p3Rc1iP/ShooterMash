@@ -185,9 +185,7 @@ namespace ShooterMashup.Building
             foreach (Obb box in a)
             {
                 Vector3 size = box.Size;
-                float volume = size.x * size.y * size.z;
-                total += volume;
-                float perSample = volume / (Samples * Samples * Samples);
+                float perSample = size.x * size.y * size.z / (Samples * Samples * Samples);
                 for (int x = 0; x < Samples; x++)
                 for (int y = 0; y < Samples; y++)
                 for (int z = 0; z < Samples; z++)
@@ -196,10 +194,13 @@ namespace ShooterMashup.Building
                         ((x + 0.5f) / Samples - 0.5f) * size.x,
                         ((y + 0.5f) / Samples - 0.5f) * size.y,
                         ((z + 0.5f) / Samples - 0.5f) * size.z);
+                    if (!box.KeepsLocal(local))
+                        continue;                                  // outside a wedge's kept half
+                    total += perSample;
                     Vector3 p = box.center + box.rotation * local;
                     foreach (Obb other in b)
                     {
-                        if (Contains(other, p))
+                        if (other.Contains(p))
                         {
                             inside += perSample;
                             break;
@@ -208,12 +209,6 @@ namespace ShooterMashup.Building
                 }
             }
             return total > 0f ? inside / total : 0f;
-        }
-
-        static bool Contains(in Obb box, Vector3 p)
-        {
-            Vector3 local = Quaternion.Inverse(box.rotation) * (p - box.center);
-            return Mathf.Abs(local.x) <= box.halfExtents.x && Mathf.Abs(local.y) <= box.halfExtents.y && Mathf.Abs(local.z) <= box.halfExtents.z;
         }
 
         static Vector3 BoxesCenter(Obb[] boxes)

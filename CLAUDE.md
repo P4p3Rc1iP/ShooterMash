@@ -74,10 +74,23 @@ Agreed with the owner:
 - Pieces come in set materials (enforced by `BuildSystem`): wood has every shape (prototyping);
   stone has slabs (0.5 m thick floors that snap on both faces), pillars and stairs; iron has
   pillars, beams and diagonal beams (45° and 27°, rising 1 or 3 m, snapping at both ends of
-  their centre line like roofs; beams snap by their centre line). Wood also has see-through
+  their centre line like roofs; beams snap by their centre line; beams are 0.25 m thick like
+  pillars, a bit more than the 0.2 m walls). Wood also has see-through
   1 m wide ladders (1 and 3 m tall; climbable through
-  `SurfaceFlags.Ladder`, which the piece view adds as a `PmSurface`). Roofs rest on their snap
-  edges by their underside.
+  `SurfaceFlags.Ladder`, which the piece view adds as a `PmSurface`). Roofs snap by their centre
+  plane, so roofs, diagonals and beams snapped to one point cross there (the owner's choice
+  over resting the roof's underside on its edges; it sits half its thickness into a wall top).
+  Roof pieces (wood) in three pitches, as ratios so edges stay on the grid: 45° (1:1), 27° (1:2,
+  like the stairs) and 63° (2:1; 3:1 at 72° was too steep). Each set: plain slopes, hip and
+  valley corners, a 1 m ridge cap for odd widths, right-triangle gable walls and a gable cap
+  under the ridge cap. 45° and 27° come in 3 and 1 m; 63° only with a 1 m run (3 m would rise
+  6 m), in 3 and 1 m widths. Names give the plan size (width x run), gables width x height.
+  The build menu scrolls when it doesn't fit the screen. Non-box shapes are wedges (`Obb.cut`: a
+  box halved along a diagonal), with convex mesh colliders; everything else is still boxes.
+  The showcase (`BuildShowcase.Plan`) is three structures that together use every piece in
+  every material (farmstead 45°, barn 27°, watchtower 63°); a test enforces that, so new
+  pieces need a place in it. Iron needs an iron or stone path to the ground: hung off wood it
+  loses too much support (its losses scale with its 1500 max).
 - Structures must rest on terrain or static world geometry. Digging out the ground under a
   structure collapses it. Pieces sit freely on voxel terrain (no voxel snapping), and voxel
   size is unrelated to piece size. The voxel world must report changed regions to
@@ -92,8 +105,8 @@ Agreed with the owner:
 ## To-do / open questions
 
 - **Open building topics (raised 2026-10-12):** stair width (1 and 3 m wide stairs now, still
-  being tried out), ladders (wood ladder pieces added 2026-10-12, more to try), and roofs (only
-  plain 45° slabs so far).
+  being tried out), ladders (wood ladder pieces added 2026-10-12, more to try), and roofs (45°, 27° and 63° sets with corners, caps and
+  gables since 2026-10-13; still to be tried in play).
 
 - Sprinting in big open terrain. Ideas raised but not built: soft sprint falloff as stamina runs
   low, open-world tuning (bigger bar, regen while walking), and a long-term fatigue layer that
@@ -138,8 +151,10 @@ Agreed with the owner:
   `Application.runInBackground = true` (set via `eval`, lasts for that Play session).
   `simulate_key` (key names like `W`, `Digit3`) moved the player via Input Actions, but never
   showed up on `Keyboard.current` reads (the build tool's keys), so test those by calling the
-  methods through `eval`/reflection, or ask the owner. `capture_game_view --save_path` must be
-  inside the project folder.
+  methods through `eval`/reflection, or ask the owner. `capture_game_view --save_path` is relative to
+  `Assets/` and refuses `..` (it logs an error), so it always lands inside Assets: move the
+  PNG out and delete the folder and its `.meta` files right after. It captures the IMGUI
+  (menus, HUD); for clean scene shots render a Camera to a RenderTexture via `eval` instead.
 - Fallback when no Editor is connected: batch-mode Unity can't run on this project folder while
   the Editor has it open. Copy `Assets`, `Packages` and `ProjectSettings` to a scratch folder and
   run there:

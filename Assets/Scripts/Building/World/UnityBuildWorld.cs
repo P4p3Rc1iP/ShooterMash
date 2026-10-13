@@ -26,6 +26,8 @@ namespace ShooterMashup.Building
         {
             foreach (Obb box in boxes)
             {
+                // A wedge is tested as its whole box: roof pieces don't stand on the ground, so the
+                // approximation hasn't been worth a convex query yet.
                 Vector3 half = box.halfExtents + Vector3.one * tolerance;
                 int n = Physics.OverlapBoxNonAlloc(box.center, half, overlaps, box.rotation, solidMask, QueryTriggerInteraction.Ignore);
                 for (int i = 0; i < n; i++)

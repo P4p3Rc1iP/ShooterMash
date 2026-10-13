@@ -6,8 +6,11 @@ that support goes. Structures only for now; vehicles come later.
 ## Try it
 
 Rebuild the test map (`ShooterMashup > Build Movement Test Map`); you spawn in front of the
-building area (around x = 56). Press **B** to take out the build tool. A house, a
-pavilion and a lookout tower are built there from real pieces when play starts (`BuildShowcase`).
+building area (around x = 56). Press **B** to take out the build tool. Three structures are
+built there from real pieces when play starts (`BuildShowcase`): a farmstead (45° roofs), a
+timber-frame barn (27°) and a watchtower (63°), each with a cottage roofed in 1 m pieces.
+Together they use every piece in every material it comes in; a test checks that, and that they
+build without failures.
 
 Pieces are on a 1 m grid: every shape in 3 m and 1 m, storeys of 3 m (2.8 m headroom under a
 floor).
@@ -15,7 +18,7 @@ floor).
 | Input | Action |
 | --- | --- |
 | B | take out / put away the build tool |
-| Middle mouse | build menu (material and piece, with pictures) |
+| Middle mouse | build menu (material and piece, with pictures; scrolls when it doesn't fit) |
 | Shift + right mouse | copy the piece you aim at: its shape, material and rotation |
 | Left mouse | place |
 | Right mouse (hold) | show what would collapse; release to remove the piece, or dig a dirt block |
@@ -29,7 +32,13 @@ Pieces come in set materials: wood has every shape, including diagonal beams (45
 1 or 3 m, snapping at the ends of their centre line) and see-through 1 m wide ladders (1 and 3 m tall,
 climbable, snapping 0.1 m out from what they lean on); stone has slabs (0.5 m thick floors),
 pillars and stairs; iron has pillars and (diagonal) beams. Horizontal beams snap by their centre
-line. Each material has a placeholder texture and colour: wood planks, stone bricks, riveted iron
+line, and roofs by their centre plane, so roofs, diagonals and beams snapped to one point cross
+there. Wood roofs come in three pitches: 45° (1:1), 27° (1:2) and a steep 63° (2:1, 1 m run only).
+Each set has plain slopes, outer (hip) and inner (valley) corners, a 1 m ridge cap for odd widths
+(fits between two roofs whose tops are 1 m apart), right-triangle gable walls (one per slope;
+turn it 180° for the other side) and a gable cap that closes the gable under the ridge cap.
+Roofs are named by plan size (width x run), gables by width x height.
+Each material has a placeholder texture and colour: wood planks, stone bricks, riveted iron
 plates (`StructureManager > Material Colors`). While the tool is out, the colour shows support
 instead (blue grounded, then green, yellow, red as support runs out) and the pattern still shows
 the material. Lean is off while the tool is out (Q/E are used for snapping).
@@ -47,7 +56,7 @@ Simulation/   Pure, deterministic. No MonoBehaviours.
   BuildSystem.Integrity.cs  support solver and collapse
   BuildSystem.Undo.cs     per-player undo/redo
   BuildSnapping.cs        Valheim-style snap-point matching
-  Obb.cs, SpatialHash.cs  geometry helpers
+  Obb.cs, SpatialHash.cs  geometry helpers (Obb is a box, or a wedge: a box cut along a diagonal)
 World/
   UnityBuildWorld.cs      IBuildWorld on PhysX: anything solid that isn't a piece is ground
   DiggableBlock.cs        stand-in terrain that can be dug away

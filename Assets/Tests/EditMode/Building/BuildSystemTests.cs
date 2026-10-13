@@ -46,7 +46,7 @@ namespace ShooterMashup.Building.Tests
         const float G = PieceCatalog.Grid; // big pieces are G across
         const float H = G / 2f;
         const float PostTop = PieceCatalog.StoreyHeight;
-        const float BeamY = PostTop - 0.2f; // a beam flush with the top of a post
+        const float BeamY = PostTop - PieceCatalog.BeamSize; // a beam flush with the top of a post
         static float BeamX(int k) => H + G * k; // centre of the k-th beam out from a post at the origin
 
         BuildConfig cfg;
@@ -413,11 +413,11 @@ namespace ShooterMashup.Building.Tests
             Place(Pillar3, BuildMaterial.Wood, Vector3.zero);
             // Force the beam's right end onto the post top: beams snap by their centre line, so the
             // beam sits centred on the top of the post.
-            int held = Held(Beam3, new Vector3(H, 0.1f, 0));
+            int held = Held(Beam3, new Vector3(H, PieceCatalog.BeamSize / 2f, 0));
             SnapResult s = Snap(Beam3, new Vector3(0.05f, PostTop, 0), Vector3.up, held: held);
             Assert.IsTrue(s.snapped);
             Assert.AreEqual(held, s.heldIndex);
-            AssertNear(new Vector3(-H, PostTop - 0.1f, 0), s.position);
+            AssertNear(new Vector3(-H, PostTop - PieceCatalog.BeamSize / 2f, 0), s.position);
         }
 
         [TestCase("Diagonal beam 45° 3 m", 3f, 3f)]
@@ -528,17 +528,191 @@ namespace ShooterMashup.Building.Tests
 
         [TestCase("Roof 45° 3x3")]
         [TestCase("Roof 45° 1x1")]
-        public void Roof_RestsOnItsSnapEdges(string name)
+        public void Roof_LinesUpWithDiagonalBeams(string name)
         {
-            // The slab's underside runs through every snap point, so snapped to a wall top it sits on
-            // it rather than cutting into it.
+            // The slab's centre plane runs through every snap point, like the centre line of a
+            // diagonal beam, so a roof and a 45° diagonal of the same size placed the same way lie
+            // in one plane, and both cross a beam snapped to their ends at its centre line.
             PieceDef roof = PieceCatalog.All[Type(name)];
             Obb slab = roof.boxes[0];
             foreach (Vector3 p in roof.snapPoints)
             {
                 Vector3 local = Quaternion.Inverse(slab.rotation) * (p - slab.center);
-                Assert.AreEqual(-slab.halfExtents.y, local.y, 1e-4f, $"{name}: {p}");
+                Assert.AreEqual(0f, local.y, 1e-4f, $"{name}: {p}");
             }
+            string size = name.Substring(name.LastIndexOf('x') + 1);
+            Obb diagonal = PieceCatalog.All[Type($"Diagonal beam 45° {size} m")].boxes[0];
+            Vector3 offset = Quaternion.Inverse(slab.rotation) * (diagonal.center - slab.center);
+            Assert.AreEqual(0f, offset.y, 1e-4f, "diagonal's centre line in the roof's centre plane");
+        }
+
+        static bool OnPiece(PieceDef def, Vector3 p) => def.boxes.Any(b => b.Contains(p));
+
+        [Test]
+        public void Wedge_OverlapsOnlyOnItsKeptSide()
+        {
+            // The 3 m gable wall: a 3 x 3 m wall cut along its diagonal, high at +x.
+            Obb gable = PieceCatalog.All[Type("Gable wall 45° 3x3")].boxes[0];
+            Assert.IsTrue(gable.IsWedge);
+            var small = new Vector3(0.2f, 0.2f, 0.2f);
+            Assert.IsTrue(Obb.Overlap(gable, new Obb(new Vector3(1f, 0.5f, 0), small), 0f), "low corner, kept");
+            Assert.IsFalse(Obb.Overlap(gable, new Obb(new Vector3(-1f, 2.5f, 0), small), 0f), "high corner, cut away");
+            // Only the cut plane separates this one: inside the whole box, just above the diagonal.
+            Assert.IsFalse(Obb.Overlap(gable, new Obb(new Vector3(-0.2f, 1.8f, 0), small), 0f), "just above the cut");
+            Assert.IsTrue(Obb.Overlap(gable, new Obb(new Vector3(0.2f, 1.6f, 0), small), 0f), "across the cut");
+            Assert.AreEqual(4.5f * 0.2f, gable.Volume, 1e-4f);
+        }
+
+        [TestCase("Roof 45° outer corner 3x3", true, 1f)]
+        [TestCase("Roof 45° outer corner 1x1", true, 1f)]
+        [TestCase("Roof 45° inner corner 3x3", false, 1f)]
+        [TestCase("Roof 45° inner corner 1x1", false, 1f)]
+        [TestCase("Roof 27° outer corner 3x3", true, 0.5f)]
+        [TestCase("Roof 27° outer corner 1x1", true, 0.5f)]
+        [TestCase("Roof 27° inner corner 3x3", false, 0.5f)]
+        [TestCase("Roof 27° inner corner 1x1", false, 0.5f)]
+        [TestCase("Roof 63° outer corner 1x1", true, 2f)]
+        [TestCase("Roof 63° inner corner 1x1", false, 2f)]
+        public void RoofCorners_FollowBothSlopes(string name, bool outer, float slope)
+        {
+            // Over the tile, the roof's centre plane is the lower of the two slopes (rising +z and
+            // rising +x) for a hip, and the higher one for a valley. Sampled away from the diagonal.
+            PieceDef corner = PieceCatalog.All[Type(name)];
+            float h = corner.snapPoints.Max(p => p.x);
+            for (float x = -0.8f * h; x <= 0.8f * h + 1e-4f; x += 0.4f * h)
+            for (float z = -0.8f * h; z <= 0.8f * h + 1e-4f; z += 0.4f * h)
+            {
+                if (slope * Mathf.Abs(x - z) < 0.3f)
+                    continue;
+                float low = slope * (Mathf.Min(x, z) + h), high = slope * (Mathf.Max(x, z) + h);
+                Assert.IsTrue(OnPiece(corner, new Vector3(x, outer ? low : high, z)), $"{name}: roof at ({x}, {z})");
+                Assert.IsFalse(OnPiece(corner, new Vector3(x, outer ? high : low, z)), $"{name}: no roof at the other slope ({x}, {z})");
+            }
+        }
+
+        [Test]
+        public void FourOuterCorners_MakeAPyramidRoof()
+        {
+            // A 6 x 6 m room of 3 m walls, roofed by four hip corners rising to a peak in the middle.
+            foreach (float x in new[] { H, G + H })
+            {
+                Place(Wall3, BuildMaterial.Wood, new Vector3(x, 0, 0));
+                Place(Wall3, BuildMaterial.Wood, new Vector3(x, 0, 2 * G));
+            }
+            foreach (float z in new[] { H, G + H })
+            {
+                Place(Wall3, BuildMaterial.Wood, new Vector3(0, 0, z), 90);
+                Place(Wall3, BuildMaterial.Wood, new Vector3(2 * G, 0, z), 90);
+            }
+            int corner = Type("Roof 45° outer corner 3x3");
+            var ids = new[]
+            {
+                Place(corner, BuildMaterial.Wood, new Vector3(H, G, H)),
+                Place(corner, BuildMaterial.Wood, new Vector3(G + H, G, H), -90),
+                Place(corner, BuildMaterial.Wood, new Vector3(G + H, G, G + H), 180),
+                Place(corner, BuildMaterial.Wood, new Vector3(H, G, G + H), 90),
+            };
+            foreach (int id in ids)
+            {
+                Assert.Greater(Support(id), 0f);
+                // Just inside its own tile, below the peak at (G, 2G, G).
+                PieceRecord r = sys.Get(id).record;
+                Vector3 inward = new Vector3(r.position.x - G, 0, r.position.z - G).normalized * 0.1f;
+                Vector3 nearPeak = new Vector3(G, 2 * G - 0.15f, G) + inward;
+                Assert.IsTrue(OnPiece(PieceCatalog.All[corner], Quaternion.Inverse(r.rotation) * (nearPeak - r.position)), "reaches the peak");
+            }
+        }
+
+        [Test]
+        public void OuterCorner_SnapsOntoTheCornerOfTwoWalls()
+        {
+            Place(Wall3, BuildMaterial.Wood, new Vector3(H, 0, 0));
+            Place(Wall3, BuildMaterial.Wood, new Vector3(0, 0, H), 90);
+            SnapResult s = Snap(Type("Roof 45° outer corner 3x3"), new Vector3(0.15f, G, 0.1f), Vector3.up);
+            Assert.IsTrue(s.snapped);
+            AssertNear(new Vector3(H, G, H), s.position);
+        }
+
+        [Test]
+        public void GableWall_SnapsOntoAWallTop()
+        {
+            Place(Wall3, BuildMaterial.Wood, Vector3.zero);
+            int gable = Type("Gable wall 45° 3x3");
+            SnapResult s = Snap(gable, new Vector3(0.3f, G, 0.05f), Vector3.up);
+            Assert.IsTrue(s.snapped);
+            AssertNear(new Vector3(0, G, 0), s.position);
+            Assert.IsTrue(TryPlace(gable, BuildMaterial.Wood, s.position).Ok);
+        }
+
+        [Test]
+        public void RoofCap_BridgesTwoRoofsAMetreApart()
+        {
+            // An odd-width roof: 1 m slopes from both sides leave a 1 m gap at the top for the cap.
+            int roof = Type("Roof 45° 1x1"), cap = Type("Roof cap 45° 1x1");
+            Place(roof, BuildMaterial.Wood, new Vector3(0, 0, 0.5f));
+            Place(roof, BuildMaterial.Wood, new Vector3(0, 0, 2.5f), 180);
+            SnapResult s = Snap(cap, new Vector3(0.1f, 1f, 1.05f), Vector3.up);
+            Assert.IsTrue(s.snapped);
+            AssertNear(new Vector3(0, 1f, 1.5f), s.position);
+            int id = Place(cap, BuildMaterial.Wood, s.position);
+            Assert.Greater(Support(id), 0f);
+            // The ridge is half a metre up, and the two halves meet in a clean top edge.
+            PieceDef def = PieceCatalog.All[cap];
+            Assert.IsTrue(OnPiece(def, new Vector3(0, 0.5f + 0.13f, 0)));
+            Assert.IsFalse(OnPiece(def, new Vector3(0, 0.5f + 0.16f, 0)));
+        }
+
+        [TestCase("Roof 45° 3x3", 45f)]
+        [TestCase("Roof 45° 1x1", 45f)]
+        [TestCase("Roof 27° 3x3", 26.57f)]
+        [TestCase("Roof 27° 1x1", 26.57f)]
+        [TestCase("Roof 63° 3x1", 63.43f)]
+        [TestCase("Roof 63° 1x1", 63.43f)]
+        public void Roofs_HaveTheirPitch(string name, float degrees)
+        {
+            PieceDef roof = PieceCatalog.All[Type(name)];
+            float rise = roof.snapPoints.Max(p => p.y);
+            float run = roof.snapPoints.Max(p => p.z) - roof.snapPoints.Min(p => p.z);
+            Assert.AreEqual(degrees, Mathf.Atan2(rise, run) * Mathf.Rad2Deg, 0.01f);
+        }
+
+        [TestCase("45°", 0.5f)]
+        [TestCase("27°", 0.25f)]
+        [TestCase("63°", 1f)]
+        public void RoofCap_RidgeIsCleanAndTheGableCapFillsUnderIt(string pitch, float rise)
+        {
+            // The ridge cap's halves meet at the ridge without poking out above either top face.
+            PieceDef cap = PieceCatalog.All[Type($"Roof cap {pitch} 1x1")];
+            float slope = rise / 0.5f;
+            float top = 0.1f * Mathf.Sqrt(1f + slope * slope);  // half a slab, measured vertically
+            Assert.IsTrue(OnPiece(cap, new Vector3(0, rise, 0)), "solid at the ridge");
+            for (float z = -0.45f; z <= 0.45f; z += 0.05f)
+            for (float x = -0.4f; x <= 0.4f; x += 0.4f)
+                Assert.IsFalse(OnPiece(cap, new Vector3(x, rise + top - slope * Mathf.Abs(z) + 0.01f, z)), $"pokes out at z {z}");
+
+            // The gable cap is the triangle under it: up to the cap's centre plane, like the gable walls.
+            string riseName = rise.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+            PieceDef gable = PieceCatalog.All[Type($"Gable cap {pitch} 1x{riseName}")];
+            for (float x = -0.4f; x <= 0.4f; x += 0.1f)
+            {
+                float y = rise - slope * Mathf.Abs(x);
+                Assert.IsTrue(OnPiece(gable, new Vector3(x, y - 0.03f, 0)), $"inside at {x}");
+                Assert.IsFalse(OnPiece(gable, new Vector3(x, y + 0.03f, 0)), $"outside at {x}");
+            }
+        }
+
+        [Test]
+        public void Showcase_UsesEveryPieceInEveryMaterialAndBuilds()
+        {
+            List<BuildShowcase.Placement> plan = BuildShowcase.Plan(BuildShowcase.DefaultFarm, BuildShowcase.DefaultBarn, BuildShowcase.DefaultTower);
+            foreach (BuildShowcase.Placement p in plan)
+            {
+                BuildResult r = BuildShowcase.Execute(sys, p, time);
+                Assert.IsTrue(r.Ok, $"{p}: {r.failure}");
+            }
+            var used = new HashSet<(string, BuildMaterial)>(plan.Select(p => (p.name, p.material)));
+            var missing = PieceCatalog.All.SelectMany(d => d.Materials.Select(m => (d.name, m))).Where(x => !used.Contains(x)).ToList();
+            Assert.IsEmpty(missing, "not in the showcase: " + string.Join(", ", missing));
         }
 
         [Test]

@@ -1,12 +1,25 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 namespace ShooterMashup.Building
 {
     /// <summary>
-    /// Builds two example structures when play starts, through ordinary BuildCmds: they have real
-    /// support, show the support colours and collapse like anything a player builds. Placements
-    /// that fail are logged, which doubles as a check on the pieces.
+    /// Builds three example structures when play starts, through ordinary BuildCmds: they have
+    /// real support, show the support colours and collapse like anything a player builds.
+    /// Together they use every piece in every material it comes in (a test checks this), so
+    /// placements that fail, which are logged, double as a check on the pieces.
+    ///
+    /// - Farmstead (45° roofs): an L-shaped house on a stone foundation, with hip, valley and
+    ///   gable, doors and a window from 1x1 walls, a stone chimney and a fence; beside it an
+    ///   L-shaped cottage roofed with 1 m pieces (ridge caps crossing at the corner, a small hip
+    ///   with a gable cap at one end, a gable at the other).
+    /// - Barn (27° roofs): a timber frame on stone footings with a raised floor, wood and iron
+    ///   beams, diagonal bracing in the open bays, a porch and steps; beside it a 1 m cottage
+    ///   with small hips at both ends.
+    /// - Watchtower (63° roof): stone, iron and wood legs, stairs up to the first floor from all
+    ///   four sides, knee braces, ladders, a railed lookout with a steep roof; beside it a 1 m cottage.
     /// </summary>
     [RequireComponent(typeof(StructureManager))]
     public class BuildShowcase : MonoBehaviour
@@ -14,206 +27,367 @@ namespace ShooterMashup.Building
         /// <summary>Owner id for showcase pieces, so they never mix with a player's undo history.</summary>
         public const int Owner = -2;
 
-        [Tooltip("Where the house's foundation starts (its -x, -z corner).")]
-        public Vector3 houseCorner = new Vector3(48f, 0f, 20f);
-        [Tooltip("Where the pavilion's platform starts (its -x, -z corner).")]
-        public Vector3 pavilionCorner = new Vector3(48f, 0f, 35f);
-        [Tooltip("Where the lookout tower's legs start (its -x, -z corner).")]
-        public Vector3 towerCorner = new Vector3(61f, 0f, 24f);
+        [Tooltip("Where the farmhouse's foundation starts (its -x, -z corner); its cottage is behind it.")]
+        public Vector3 farmCorner = DefaultFarm;
+        [Tooltip("Where the barn's frame starts (its -x, -z corner); its cottage is behind it.")]
+        public Vector3 barnCorner = DefaultBarn;
+        [Tooltip("Where the watchtower's legs start (its -x, -z corner).")]
+        public Vector3 towerCorner = DefaultTower;
 
-        StructureManager structures;
-        int placed, failed;
+        public static readonly Vector3 DefaultFarm = new Vector3(44f, 0f, 22f);
+        public static readonly Vector3 DefaultBarn = new Vector3(58f, 0f, 22f);
+        public static readonly Vector3 DefaultTower = new Vector3(70f, 0f, 44f);
 
-        const BuildMaterial Wood = BuildMaterial.Wood, Stone = BuildMaterial.Stone, Iron = BuildMaterial.Iron;
-        const float T = PieceCatalog.Grid, H = T / 2f; // a 3 m tile, and half of one
+        /// <summary>One piece of the plan.</summary>
+        public struct Placement
+        {
+            public string name;
+            public BuildMaterial material;
+            public Vector3 position;
+            public float yaw;
+            public override string ToString() => $"{material} {name} at {position} (yaw {yaw})";
+        }
 
         void Start()
         {
-            structures = GetComponent<StructureManager>();
-            BuildHouse(houseCorner);
-            BuildPavilion(pavilionCorner);
-            BuildTower(towerCorner);
+            BuildSystem system = GetComponent<StructureManager>().System;
+            int placed = 0, failed = 0;
+            foreach (Placement p in Plan(farmCorner, barnCorner, towerCorner))
+            {
+                BuildResult r = Execute(system, p, Time.timeAsDouble);
+                if (r.Ok)
+                {
+                    placed++;
+                    continue;
+                }
+                failed++;
+                Debug.LogWarning($"Build showcase: {p} failed: {r.failure}");
+            }
             if (failed > 0)
                 Debug.LogWarning($"Build showcase: {placed} pieces placed, {failed} failed (see above).");
             else
                 Debug.Log($"Build showcase: {placed} pieces placed.");
         }
 
-        /// <summary>
-        /// A house on a stone foundation with a doorway made of 1x1 walls, a gable roof, and stone
-        /// stairs up to a back deck on iron pillars.
-        /// </summary>
-        void BuildHouse(Vector3 o)
+        public static BuildResult Execute(BuildSystem system, Placement p, double time)
         {
-            const float slabTop = 0.5f, wallTop = slabTop + T;
-
-            // Foundation: 3 x 3 stone slabs.
-            for (int i = 0; i < 3; i++)
-            for (int j = 0; j < 3; j++)
-                Place("Slab 3x3", Stone, o + new Vector3(H + T * i, 0, H + T * j));
-
-            // Walls of the 2 x 2 tile house.
-            for (int i = 0; i < 2; i++)
-                Place("Wall 3x3", Wood, o + new Vector3(H + T * i, slabTop, 2 * T));       // back
-            for (int j = 0; j < 2; j++)
-            {
-                Place("Wall 3x3", Wood, o + new Vector3(0, slabTop, H + T * j), 90);       // left
-                Place("Wall 3x3", Wood, o + new Vector3(2 * T, slabTop, H + T * j), 90);   // right
-            }
-            Place("Wall 3x3", Wood, o + new Vector3(H, slabTop, 0));                      // front left
-
-            // Front right: a 1 m wide, 2 m tall doorway in the middle of a tile of 1x1 walls.
-            for (int col = 0; col < 3; col++)
-            for (int row = 0; row < 3; row++)
-                if (col != 1 || row == 2)
-                    Place("Wall 1x1", Wood, o + new Vector3(T + 0.5f + col, slabTop + row, 0));
-
-            // Upper floor over the house, and the back deck on iron pillars.
-            for (int i = 0; i < 2; i++)
-            for (int j = 0; j < 2; j++)
-                Place("Floor 3x3", Wood, o + new Vector3(H + T * i, wallTop - 0.2f, H + T * j));
-            foreach (float x in new[] { 0f, T, 2 * T, 3 * T })
-                Place("Pillar 3 m", Iron, o + new Vector3(x, slabTop, 3 * T));
-            Place("Pillar 3 m", Iron, o + new Vector3(3 * T, slabTop, 2 * T));
-            for (int i = 0; i < 3; i++)
-                Place("Floor 3x3", Wood, o + new Vector3(H + T * i, wallTop - 0.2f, 2 * T + H));
-
-            // Stone stairs up the side, arriving at the deck.
-            Place("Stairs 3 m up, 1 m wide", Stone, o + new Vector3(2 * T + H, slabTop, T));
-
-            // Railing round the deck.
-            for (int k = 0; k < 9; k++)
-                Place("Wall 1x1", Wood, o + new Vector3(0.5f + k, wallTop, 3 * T));
-            for (int k = 0; k < 3; k++)
-                Place("Wall 1x1", Wood, o + new Vector3(3 * T, wallTop, 2 * T + 0.5f + k), 90);
-
-            // Gable roof over the house, ridge along x.
-            for (int i = 0; i < 2; i++)
-            {
-                Place("Roof 45° 3x3", Wood, o + new Vector3(H + T * i, wallTop, H));
-                Place("Roof 45° 3x3", Wood, o + new Vector3(H + T * i, wallTop, T + H), 180);
-            }
-        }
-
-        /// <summary>
-        /// An open pavilion on a raised stone platform with wide entrance stairs, wood and iron
-        /// pillars and beams, a gable roof, a back wall and a side wall with a window.
-        /// </summary>
-        void BuildPavilion(Vector3 o)
-        {
-            const float deck = 1f, top = deck + T;   // platform top, pillar tops
-
-            // Platform: two layers of 3 x 2 stone slabs, 1 m high.
-            for (int layer = 0; layer < 2; layer++)
-            for (int i = 0; i < 3; i++)
-            for (int j = 0; j < 2; j++)
-                Place("Slab 3x3", Stone, o + new Vector3(H + T * i, 0.5f * layer, H + T * j));
-
-            // Wide stone stairs up to the middle of the front.
-            Place("Stairs 1 m up, 3 m wide", Stone, o + new Vector3(T + H, 0, -1f));
-
-            // Pillars on the front and back edges: wood, and iron along the right side.
-            for (int i = 0; i <= 3; i++)
-            foreach (float z in new[] { 0f, 2 * T })
-                Place("Pillar 3 m", i == 3 ? Iron : Wood, o + new Vector3(T * i, deck, z));
-
-            // Beams on top, flush with the pillar tops: along x on the front and back, along z on every row.
-            for (int i = 0; i < 3; i++)
-            foreach (float z in new[] { 0f, 2 * T })
-                Place("Beam 3 m", i == 2 ? Iron : Wood, o + new Vector3(H + T * i, top - 0.2f, z));
-            for (int i = 0; i <= 3; i++)
-            for (int j = 0; j < 2; j++)
-                Place("Beam 3 m", i == 3 ? Iron : Wood, o + new Vector3(T * i, top - 0.2f, H + T * j), 90);
-
-            // Gable roof, ridge along x.
-            for (int i = 0; i < 3; i++)
-            {
-                Place("Roof 45° 3x3", Wood, o + new Vector3(H + T * i, top, H));
-                Place("Roof 45° 3x3", Wood, o + new Vector3(H + T * i, top, T + H), 180);
-            }
-
-            // Back wall, and a left wall with a window made of 1x1 pieces.
-            for (int i = 0; i < 3; i++)
-                Place("Wall 3x3", Wood, o + new Vector3(H + T * i, deck, 2 * T));
-            Place("Wall 3x3", Wood, o + new Vector3(0, deck, H), 90);
-            for (int row = 0; row < 3; row++)
-            for (int col = 0; col < 3; col++)
-                if (row != 1 || col != 1)
-                    Place("Wall 1x1", Wood, o + new Vector3(0, deck + row, T + 0.5f + col), 90);
-        }
-
-        /// <summary>
-        /// A lookout tower: four legs three storeys high (stone at the bottom, wood above), braced
-        /// by a ring of beams at each level, with a railed platform on top and ladders up the front.
-        /// </summary>
-        void BuildTower(Vector3 o)
-        {
-            const int levels = 3;
-            const float top = T * levels;
-
-            for (int level = 0; level < levels; level++)
-            foreach (float x in new[] { 0f, T })
-            foreach (float z in new[] { 0f, T })
-                Place("Pillar 3 m", level == 0 ? Stone : Wood, o + new Vector3(x, T * level, z));
-
-            // A ring of beams at the top of each level, flush with the pillar tops.
-            for (int level = 1; level <= levels; level++)
-            {
-                float y = T * level - 0.2f;
-                foreach (float z in new[] { 0f, T })
-                    Place("Beam 3 m", Wood, o + new Vector3(H, y, z));
-                foreach (float x in new[] { 0f, T })
-                    Place("Beam 3 m", Wood, o + new Vector3(x, y, H), 90);
-            }
-
-            // Bracing: a 45° diagonal across every storey of the back and sides (the front has the
-            // ladder), knee braces under the platform at the front either side of it, and 27° iron
-            // stays from the ground up to the side legs.
-            for (int level = 0; level < levels; level++)
-            {
-                float y = T * level;
-                Place("Diagonal beam 45° 3 m", Wood, o + new Vector3(0, y, H));         // left, rising to the back
-                Place("Diagonal beam 45° 3 m", Wood, o + new Vector3(T, y, H), 180);    // right, rising to the front
-                Place("Diagonal beam 45° 3 m", Wood, o + new Vector3(H, y, T), 90);     // back, rising to the right
-            }
-            Place("Diagonal beam 45° 1 m", Wood, o + new Vector3(0.5f, top - 1.1f, 0), 90);
-            Place("Diagonal beam 45° 1 m", Wood, o + new Vector3(T - 0.5f, top - 1.1f, 0), -90);
-            foreach (float z in new[] { 0f, T })
-            {
-                Place("Diagonal beam 27° 3 m", Iron, o + new Vector3(-T, 0, z), 90);      // from 6 m out on the left
-                Place("Diagonal beam 27° 3 m", Iron, o + new Vector3(2 * T, 0, z), -90);  // and on the right
-            }
-
-            // Platform with a railing; the front has a gap where the ladder arrives.
-            Place("Floor 3x3", Wood, o + new Vector3(H, top - 0.2f, H));
-            for (int k = 0; k < 3; k++)
-            {
-                Place("Wall 1x1", Wood, o + new Vector3(0.5f + k, top, T));
-                Place("Wall 1x1", Wood, o + new Vector3(0, top, 0.5f + k), 90);
-                Place("Wall 1x1", Wood, o + new Vector3(T, top, 0.5f + k), 90);
-                if (k != 1)
-                    Place("Wall 1x1", Wood, o + new Vector3(0.5f + k, top, 0));
-            }
-
-            // Ladders up the middle of the front, facing out, against the beams (their faces are
-            // 0.1 m in front of the beam line).
-            for (int level = 0; level < levels; level++)
-                Place("Ladder 3 m", Wood, o + new Vector3(H, T * level, -0.1f), 180);
-        }
-
-        void Place(string name, BuildMaterial material, Vector3 position, float yaw = 0f)
-        {
-            int type = Array.FindIndex(PieceCatalog.All, d => d.name == name);
-            BuildResult r = type < 0
+            int type = Array.FindIndex(PieceCatalog.All, d => d.name == p.name);
+            return type < 0
                 ? BuildResult.Fail(BuildFailure.UnknownPiece)
-                : structures.System.Execute(BuildCmd.Place(Owner, type, material, position, Quaternion.Euler(0, yaw, 0), Time.timeAsDouble));
-            if (r.Ok)
+                : system.Execute(BuildCmd.Place(Owner, type, p.material, p.position, Quaternion.Euler(0, p.yaw, 0), time));
+        }
+
+        /// <summary>Every piece of the three structures, in an order that keeps each one supported.</summary>
+        public static List<Placement> Plan(Vector3 farm, Vector3 barn, Vector3 tower)
+        {
+            var plan = new Planner();
+            plan.Farmstead(farm);
+            plan.Barn(barn);
+            plan.Watchtower(tower);
+            return plan.list;
+        }
+
+        sealed class Planner
+        {
+            public readonly List<Placement> list = new List<Placement>();
+
+            const BuildMaterial Wood = BuildMaterial.Wood, Stone = BuildMaterial.Stone, Iron = BuildMaterial.Iron;
+            const float T = PieceCatalog.Grid, H = T / 2f; // a 3 m tile, and half of one
+            const float B = PieceCatalog.BeamSize;          // beams sit this far below a post top to be flush with it
+
+            void Place(string name, BuildMaterial material, Vector3 position, float yaw = 0f) =>
+                list.Add(new Placement { name = name, material = material, position = position, yaw = yaw });
+
+            static string N(float metres) => metres.ToString("0.##", CultureInfo.InvariantCulture);
+
+            /// <summary>
+            /// A 3 x 3 grid of 1x1 walls with some left out (a doorway or a window), along x
+            /// (yaw 0) or z (yaw 90) from `start`.
+            /// </summary>
+            void WallGrid(Vector3 start, float yaw, Func<int, int, bool> open)
             {
-                placed++;
-                return;
+                Vector3 along = yaw == 0f ? Vector3.right : Vector3.forward;
+                for (int col = 0; col < 3; col++)
+                for (int row = 0; row < 3; row++)
+                    if (!open(col, row))
+                        Place("Wall 1x1", Wood, start + along * (0.5f + col) + Vector3.up * row, yaw);
             }
-            failed++;
-            Debug.LogWarning($"Build showcase: {material} {name} at {position} (yaw {yaw}) failed: {r.failure}");
+
+            static bool Doorway(int col, int row) => col == 1 && row < 2;
+            static bool Window(int col, int row) => col == 1 && row == 1;
+
+            /// <summary>
+            /// The roof of the L shape used by the farmhouse and the barn, in 3 m pieces at height
+            /// `y`: wing A along x (9 x 6 m) with a hipped east end, wing B along +z from its west
+            /// end (6 x 6 m more) with a gable at the north end, and a valley where they meet.
+            /// </summary>
+            void LRoof(Vector3 o, string pitch, float slope, float y)
+            {
+                string roof = $"Roof {pitch} 3x3", outer = $"Roof {pitch} outer corner 3x3", inner = $"Roof {pitch} inner corner 3x3";
+                Vector3 Tile(int i, int j) => o + new Vector3(H + T * i, y, H + T * j);
+                Place(outer, Wood, Tile(0, 0));
+                Place(roof, Wood, Tile(1, 0));
+                Place(outer, Wood, Tile(2, 0), -90);
+                Place(outer, Wood, Tile(2, 1), 180);
+                Place(inner, Wood, Tile(1, 1), 180);
+                for (int j = 1; j < 4; j++) Place(roof, Wood, Tile(0, j), 90);   // rising towards wing B's ridge
+                for (int j = 2; j < 4; j++) Place(roof, Wood, Tile(1, j), -90);
+                string gable = $"Gable wall {pitch} 3x{N(slope * T)}";
+                Place(gable, Wood, o + new Vector3(H, y, 4 * T));
+                Place(gable, Wood, o + new Vector3(T + H, y, 4 * T), 180);
+            }
+
+            /// <summary>
+            /// A 6 x 6 m L-shaped cottage of storey-high walls, wings 3 m wide, roofed with 1 m
+            /// pieces of a pitch rising `slope` per metre: 1 m slopes from both sides of each
+            /// wing and ridge caps between them, crossing where the wings meet, a valley in the
+            /// inside corner and the outside corner as a hip. Wing A's east end is a small hip
+            /// (corners, a slope and a gable cap under the end of the ridge cap). Wing B's north
+            /// end is a gable (gable walls, 1x1 walls and a gable cap) or, if `gableEnd` is false
+            /// (27°, whose 0.5 m filler doesn't exist), another small hip.
+            /// </summary>
+            void Cottage(Vector3 o, string pitch, float slope, bool gableEnd)
+            {
+                foreach (float x in new[] { H, T + H }) Place("Wall 3x3", Wood, o + new Vector3(x, 0, 0));
+                Place("Wall 3x3", Wood, o + new Vector3(2 * T, 0, H), 90);
+                Place("Wall 3x3", Wood, o + new Vector3(T + H, 0, T));
+                Place("Wall 3x3", Wood, o + new Vector3(T, 0, T + H), 90);
+                Place("Wall 3x3", Wood, o + new Vector3(H, 0, 2 * T));
+                foreach (float z in new[] { H, T + H }) Place("Wall 3x3", Wood, o + new Vector3(0, 0, z), 90);
+
+                string roof = $"Roof {pitch} 1x1", outer = $"Roof {pitch} outer corner 1x1", inner = $"Roof {pitch} inner corner 1x1";
+                string cap = $"Roof cap {pitch} 1x1", gableCap = $"Gable cap {pitch} 1x{N(slope / 2f)}";
+                const float y = T;
+                Vector3 Tile(int i, int j) => o + new Vector3(i + 0.5f, y, j + 0.5f);
+                Vector3 Ridge(int i, int j) => Tile(i, j) + Vector3.up * slope;   // caps sit on the slopes' tops
+
+                // Wing A (x 0..6, z 0..3): south slope, ridge caps, north slope.
+                Place(outer, Wood, Tile(0, 0));
+                for (int i = 1; i < 5; i++) Place(roof, Wood, Tile(i, 0));
+                Place(outer, Wood, Tile(5, 0), -90);
+                Place(cap, Wood, Ridge(1, 1));
+                Place(cap, Wood, Ridge(1, 1), 90);                                  // the two ridges cross
+                for (int i = 2; i < 5; i++) Place(cap, Wood, Ridge(i, 1));
+                Place(roof, Wood, Tile(5, 1), -90);                                // the small hip at the east end
+                Place(gableCap, Wood, o + new Vector3(5f, y + slope, 1.5f), 90);
+                Place(inner, Wood, Tile(2, 2), 180);
+                for (int i = 3; i < 5; i++) Place(roof, Wood, Tile(i, 2), 180);
+                Place(outer, Wood, Tile(5, 2), 180);
+
+                // Wing B (x 0..3, z 0..6): west slope, ridge caps, east slope.
+                int end = gableEnd ? 6 : 5;
+                for (int j = 1; j < end; j++) Place(roof, Wood, Tile(0, j), 90);
+                for (int j = 2; j < end; j++) Place(cap, Wood, Ridge(1, j), 90);
+                for (int j = 3; j < end; j++) Place(roof, Wood, Tile(2, j), -90);
+                if (gableEnd)
+                {
+                    string gable = $"Gable wall {pitch} 1x{N(slope)}";
+                    Place(gable, Wood, o + new Vector3(0.5f, y, 2 * T));
+                    Place(gable, Wood, o + new Vector3(2.5f, y, 2 * T), 180);
+                    for (int row = 0; row < Mathf.RoundToInt(slope); row++)
+                        Place("Wall 1x1", Wood, o + new Vector3(1.5f, y + row, 2 * T));
+                    Place(gableCap, Wood, o + new Vector3(1.5f, y + slope, 2 * T));
+                }
+                else
+                {
+                    Place(outer, Wood, Tile(0, 5), 90);
+                    Place(roof, Wood, Tile(1, 5), 180);
+                    Place(outer, Wood, Tile(2, 5), 180);
+                    Place(gableCap, Wood, o + new Vector3(1.5f, y + slope, 5f));
+                }
+            }
+
+            /// <summary>The farmhouse (45°) on a 1 m stone foundation, with its cottage behind it.</summary>
+            public void Farmstead(Vector3 o)
+            {
+                const float floor = 1f, wallTop = floor + T;
+
+                // Foundation: two layers of 3x3 stone slabs under the L.
+                for (int layer = 0; layer < 2; layer++)
+                for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 4; j++)
+                    if (i < 2 || j < 2)
+                        Place("Slab 3x3", Stone, o + new Vector3(H + T * i, 0.5f * layer, H + T * j));
+
+                // Walls: a front door, a side door and a window made of 1x1 walls.
+                Place("Wall 3x3", Wood, o + new Vector3(H, floor, 0));
+                WallGrid(o + new Vector3(T, floor, 0), 0, Doorway);
+                Place("Wall 3x3", Wood, o + new Vector3(2 * T + H, floor, 0));
+                WallGrid(o + new Vector3(3 * T, floor, 0), 90, Window);
+                Place("Wall 3x3", Wood, o + new Vector3(3 * T, floor, T + H), 90);
+                Place("Wall 3x3", Wood, o + new Vector3(2 * T + H, floor, 2 * T));
+                foreach (float z in new[] { 2 * T + H, 3 * T + H }) Place("Wall 3x3", Wood, o + new Vector3(2 * T, floor, z), 90);
+                foreach (float x in new[] { H, T + H }) Place("Wall 3x3", Wood, o + new Vector3(x, floor, 4 * T));
+                foreach (float z in new[] { H, T + H, 3 * T + H }) Place("Wall 3x3", Wood, o + new Vector3(0, floor, z), 90);
+                WallGrid(o + new Vector3(0, floor, 2 * T), 90, Doorway);
+
+                LRoof(o, "45°", 1f, wallTop);
+
+                // Steps up to both doors, a stone chimney against wing B, and a fence with a gate.
+                Place("Stairs 1 m up, 3 m wide", Stone, o + new Vector3(T + H, 0, -1f));
+                Place("Stairs 1 m up, 1 m wide", Stone, o + new Vector3(-1f, 0, 2 * T + H), 90);
+                for (int k = 0; k < 16; k++)
+                    Place("Slab 1x1", Stone, o + new Vector3(2 * T + 0.5f, 0.5f * k, 3 * T + H));
+                foreach (float x in new[] { -1f, 2f, 7f, 10f })
+                    Place("Pillar 1 m", Wood, o + new Vector3(x, 0, -3f));
+                foreach (float x in new[] { 0.5f, 8.5f })
+                    Place("Beam 3 m", Wood, o + new Vector3(x, 1f - B, -3f));
+
+                Cottage(o + new Vector3(0, 0, 16f), "45°", 1f, gableEnd: true);
+            }
+
+            /// <summary>The timber-frame barn (27°), with its cottage behind it.</summary>
+            public void Barn(Vector3 o)
+            {
+                const float floor = 1f, top = floor + T;
+
+                // The frame: posts at every 3 m round the L, on 1 m stone footings.
+                var posts = new[]
+                {
+                    (0, 0), (1, 0), (2, 0), (3, 0), (3, 1), (3, 2), (2, 2), (2, 3), (2, 4), (1, 4), (0, 4), (0, 3), (0, 2), (0, 1),
+                };
+                foreach ((int i, int j) in posts) Place("Pillar 1 m", Stone, o + new Vector3(T * i, 0, T * j));
+                foreach ((int i, int j) in posts) Place("Pillar 3 m", Wood, o + new Vector3(T * i, floor, T * j));
+                // Beams flush with the post tops between each pair of neighbouring posts. (Iron would
+                // need an iron or stone path to the ground; on wooden posts it would lose too much.)
+                for (int k = 0; k < posts.Length; k++)
+                {
+                    (int i0, int j0) = posts[k];
+                    (int i1, int j1) = posts[(k + 1) % posts.Length];
+                    var mid = new Vector3(T * (i0 + i1) / 2f, top - B, T * (j0 + j1) / 2f);
+                    Place("Beam 3 m", Wood, o + mid, i0 == i1 ? 90 : 0);
+                }
+
+                // A raised floor, and walls on it.
+                for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 4; j++)
+                    if (i < 2 || j < 2)
+                        Place("Floor 3x3", Wood, o + new Vector3(H + T * i, floor - 0.2f, H + T * j));
+                Place("Wall 3x3", Wood, o + new Vector3(H, floor, 0));                         // south, door in the middle
+                Place("Wall 3x3", Wood, o + new Vector3(2 * T + H, floor, 0));
+                Place("Wall 3x3", Wood, o + new Vector3(2 * T + H, floor, 2 * T));             // wing A north
+                WallGrid(o + new Vector3(2 * T, floor, 2 * T), 90, Doorway);                    // wing B east, onto the porch
+                WallGrid(o + new Vector3(0, floor, 4 * T), 0, Doorway);                         // north, up the ladder
+                Place("Wall 3x3", Wood, o + new Vector3(T + H, floor, 4 * T));
+                foreach (float z in new[] { 2 * T + H, 3 * T + H }) Place("Wall 3x3", Wood, o + new Vector3(0, floor, z), 90);
+
+                // Diagonal bracing in the open bays: wood 27° on the west (from the floor), iron 27°
+                // on the east (each across two bays), and iron 45° in wing B's open bay. The iron
+                // ones start on the ground, which they need to hold up their weight.
+                Place("Diagonal beam 27° 3 m", Wood, o + new Vector3(0, floor, T));
+                Place("Diagonal beam 27° 3 m", Iron, o + new Vector3(3 * T, 0, T));
+                Place("Diagonal beam 45° 3 m", Iron, o + new Vector3(2 * T, 0, 3 * T + H));
+
+                LRoof(o, "27°", 0.5f, top);
+
+                // Steps to the doors: wide wooden ones at the front, a ladder at the back.
+                Place("Stairs 1 m up, 3 m wide", Wood, o + new Vector3(T + H, 0, -1f));
+                Place("Ladder 1 m", Wood, o + new Vector3(1.5f, 0, 4 * T + 0.1f));
+
+                // A porch over the side door: posts, 1 m beams, a small 27° gable roof and steps.
+                const float porchTop = floor + 2f, z0 = 2 * T + 0.5f;  // above the 2 m door, z 6.5..8.5
+                foreach (float z in new[] { z0, z0 + 2f }) Place("Pillar 3 m", Wood, o + new Vector3(2 * T + 2f, 0, z));
+                foreach (float z in new[] { z0, z0 + 2f })
+                foreach (float x in new[] { 2 * T + 0.5f, 2 * T + 1.5f })
+                    Place("Beam 1 m", Wood, o + new Vector3(x, porchTop - B, z));
+                foreach (float z in new[] { z0 + 0.5f, z0 + 1.5f }) Place("Beam 1 m", Wood, o + new Vector3(2 * T + 2f, porchTop - B, z), 90);
+                foreach (float x in new[] { 2 * T + 0.5f, 2 * T + 1.5f })
+                {
+                    Place("Roof 27° 1x1", Wood, o + new Vector3(x, porchTop, z0 + 0.5f));
+                    Place("Roof 27° 1x1", Wood, o + new Vector3(x, porchTop, z0 + 1.5f), 180);
+                }
+                Place("Gable wall 27° 1x0.5", Wood, o + new Vector3(2 * T + 2f, porchTop, z0 + 0.5f), -90);
+                Place("Gable wall 27° 1x0.5", Wood, o + new Vector3(2 * T + 2f, porchTop, z0 + 1.5f), 90);
+                Place("Stairs 1 m up, 1 m wide", Wood, o + new Vector3(2 * T + 1f, 0, z0 + 1f), -90);
+
+                Cottage(o + new Vector3(0, 0, 16f), "27°", 0.5f, gableEnd: false);
+            }
+
+            /// <summary>
+            /// The watchtower (63°): four legs three storeys high, floors at 3 and 6 m, a railed
+            /// lookout at 9 m under a steep gable roof, with its cottage behind it.
+            /// </summary>
+            public void Watchtower(Vector3 o)
+            {
+                var corners = new[] { (0f, 0f), (T, 0f), (0f, T), (T, T) };
+                // Stone, then iron up to the lookout, so the iron railing up there has an iron path
+                // to the ground (on wood it would lose too much). Wooden posts hold the roof.
+                BuildMaterial[] legs = { Stone, Iron, Iron, Wood };
+                for (int level = 0; level < 4; level++)
+                foreach ((float x, float z) in corners)
+                    Place("Pillar 3 m", legs[level], o + new Vector3(x, T * level, z));
+
+                // A ring of beams at the top of each storey (iron), and the roof's beams (wood).
+                for (int level = 1; level <= 4; level++)
+                {
+                    float y = T * level - B;
+                    BuildMaterial m = level < 4 ? Iron : Wood;
+                    foreach (float z in new[] { 0f, T }) Place("Beam 3 m", m, o + new Vector3(H, y, z));
+                    foreach (float x in new[] { 0f, T }) Place("Beam 3 m", m, o + new Vector3(x, y, H), 90);
+                }
+
+                // Floors at 3 and 6 m, and the lookout at 9 m from 1x1 floors.
+                Place("Floor 3x3", Wood, o + new Vector3(H, T - 0.2f, H));
+                Place("Floor 3x3", Wood, o + new Vector3(H, 2 * T - 0.2f, H));
+                for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++)
+                    Place("Floor 1x1", Wood, o + new Vector3(i + 0.5f, 3 * T - 0.2f, j + 0.5f));
+
+                // Bracing: 45° diagonals across the ground storey's four sides and the third storey's
+                // back and sides. The first storey stays open for the stairs, with knee braces.
+                const string d45 = "Diagonal beam 45° 3 m";
+                foreach (float y in new[] { 0f, 2 * T })
+                {
+                    Place(d45, Wood, o + new Vector3(0, y, H));          // left, rising to the back
+                    Place(d45, Wood, o + new Vector3(T, y, H), 180);     // right, rising to the front
+                    Place(d45, Wood, o + new Vector3(H, y, T), 90);      // back, rising to the right
+                }
+                Place(d45, Wood, o + new Vector3(H, 0, 0), -90);         // front, rising to the left
+                float knee = 2 * T - B / 2f - 1f;                         // a knee brace's low end, 1 m under a beam's centre line
+                Place("Diagonal beam 45° 1 m", Iron, o + new Vector3(0.5f, knee, 0), 90);   // front, from the left leg
+                Place("Diagonal beam 27° 1 m", Iron, o + new Vector3(1f, knee, T), 90);     // back
+                Place("Diagonal beam 27° 1 m", Wood, o + new Vector3(0, knee, 1f));         // left
+                Place("Diagonal beam 45° 1 m", Wood, o + new Vector3(T, knee, 0.5f));       // right, both ends
+                Place("Diagonal beam 45° 1 m", Wood, o + new Vector3(T, knee, T - 0.5f), 180);
+                Place("Diagonal beam 45° 1 m", Wood, o + new Vector3(0.5f, knee + T, 0), 90); // third storey, front
+
+                // Stairs to the first floor from all four sides, ladders on up (front right).
+                Place("Stairs 3 m up, 1 m wide", Wood, o + new Vector3(H, 0, -T));
+                Place("Stairs 3 m up, 3 m wide", Wood, o + new Vector3(-T, 0, H), 90);
+                Place("Stairs 3 m up, 1 m wide", Stone, o + new Vector3(2 * T, 0, H), -90);
+                Place("Stairs 3 m up, 3 m wide", Stone, o + new Vector3(H, 0, 2 * T), 180);
+                for (int level = 1; level < 3; level++)
+                    Place("Ladder 3 m", Wood, o + new Vector3(2.5f, T * level, -0.1f), 180);
+
+                // The lookout's railing: iron posts and rails, open where the ladder arrives.
+                const float deck = 3 * T;
+                foreach (var (x, z) in new[] { (1f, 0f), (2f, 0f), (T, 1f), (T, 2f), (1f, T), (2f, T), (0f, 1f), (0f, 2f) })
+                    Place("Pillar 1 m", Iron, o + new Vector3(x, deck, z));
+                for (int k = 0; k < 3; k++)
+                {
+                    if (k < 2) Place("Beam 1 m", Iron, o + new Vector3(k + 0.5f, deck + 1f - B, 0));
+                    Place("Beam 1 m", Iron, o + new Vector3(k + 0.5f, deck + 1f - B, T));
+                    Place("Beam 1 m", Iron, o + new Vector3(0, deck + 1f - B, k + 0.5f), 90);
+                    Place("Beam 1 m", Iron, o + new Vector3(T, deck + 1f - B, k + 0.5f), 90);
+                }
+
+                // The steep roof: 3 m wide slopes from both sides, ridge caps, and gables at both ends.
+                const float eaves = 4 * T;
+                Place("Roof 63° 3x1", Wood, o + new Vector3(0.5f, eaves, H), 90);
+                Place("Roof 63° 3x1", Wood, o + new Vector3(T - 0.5f, eaves, H), -90);
+                for (int j = 0; j < 3; j++)
+                    Place("Roof cap 63° 1x1", Wood, o + new Vector3(H, eaves + 2f, j + 0.5f), 90);
+                foreach (float z in new[] { 0f, T })
+                {
+                    Place("Gable wall 63° 1x2", Wood, o + new Vector3(0.5f, eaves, z));
+                    Place("Gable wall 63° 1x2", Wood, o + new Vector3(T - 0.5f, eaves, z), 180);
+                    Place("Wall 1x1", Wood, o + new Vector3(H, eaves, z));
+                    Place("Wall 1x1", Wood, o + new Vector3(H, eaves + 1f, z));
+                    Place("Gable cap 63° 1x1", Wood, o + new Vector3(H, eaves + 2f, z));
+                }
+
+                Cottage(o + new Vector3(-4f, 0, 10f), "63°", 2f, gableEnd: true);
+            }
         }
     }
 }

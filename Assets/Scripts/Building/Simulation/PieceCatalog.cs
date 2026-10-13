@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using ShooterMashup.Player;
 using UnityEngine;
 
@@ -53,7 +54,9 @@ namespace ShooterMashup.Building
     {
         const float Slab = 0.2f;      // wooden floor and wall thickness
         const float Post = 0.25f;     // pillar cross-section
-        const float Beam = 0.2f;      // beam cross-section
+        /// <summary>Beam cross-section (horizontal and diagonal): as thick as a pillar, a bit more than a wall.</summary>
+        public const float BeamSize = Post;
+        const float Beam = BeamSize;
         const float StoneSlab = 0.5f; // stone slab thickness
 
         /// <summary>The grid all pieces and snap points line up on.</summary>
@@ -95,7 +98,25 @@ namespace ShooterMashup.Building
             // and 27° (rise over twice the run, like the stairs).
             foreach (float s in Sizes) all.Add(DiagonalBeam($"Diagonal beam 45° {N(s)} m", s, s).In(wood, iron));
             foreach (float s in Sizes) all.Add(DiagonalBeam($"Diagonal beam 27° {N(s)} m", 2f * s, s).In(wood, iron));
-            foreach (float s in Sizes) all.Add(Roof45($"Roof 45° {N(s)}x{N(s)}", s).In(wood));
+            // Roofs in three pitches, rising 1:1 (45°), 1:2 (27°, like the stairs) and 2:1 (63°), so
+            // every edge lands on the grid. Each set: plain slopes, hip and valley corners, a 1 m
+            // ridge cap for odd widths, gable walls under a slope and a gable cap under the ridge cap.
+            // Pieces are named by plan size (width x run), gables by width x height. The steep set
+            // has a 1 m run only (3 m would rise 6 m), in 3 m and 1 m widths.
+            foreach ((string pitch, float slope, float[] runs) in new[]
+            {
+                ("45°", 1f, Sizes), ("27°", 0.5f, Sizes), ("63°", 2f, new[] { Step }),
+            })
+            {
+                foreach (float run in runs)
+                foreach (float width in runs.Length == 1 ? Sizes : new[] { run })
+                    all.Add(Roof($"Roof {pitch} {N(width)}x{N(run)}", width, run, slope * run).In(wood));
+                foreach (float s in runs) all.Add(RoofOuterCorner($"Roof {pitch} outer corner {N(s)}x{N(s)}", s, slope * s).In(wood));
+                foreach (float s in runs) all.Add(RoofInnerCorner($"Roof {pitch} inner corner {N(s)}x{N(s)}", s, slope * s).In(wood));
+                all.Add(RoofCap($"Roof cap {pitch} {N(Step)}x{N(Step)}", Step, slope * Step / 2f).In(wood));
+                foreach (float s in runs) all.Add(GableWall($"Gable wall {pitch} {N(s)}x{N(slope * s)}", s, slope * s).In(wood));
+                all.Add(GableCap($"Gable cap {pitch} {N(Step)}x{N(slope * Step / 2f)}", Step, slope * Step / 2f).In(wood));
+            }
             foreach (float s in Sizes) all.Add(Ladder($"Ladder {N(s)} m", s).In(wood).WithSurface(SurfaceFlags.Ladder));
             // 27° stairs, twice as long as they rise (1 m up in 2 m, 3 m up in 6 m), in each width.
             foreach (float rise in Sizes)
@@ -154,19 +175,133 @@ namespace ShooterMashup.Building
             return new PieceDef(name, new[] { box }, new[] { low, high });
         }
 
-        static PieceDef Roof45(string name, float size)
+
+        /// <summary>
+        /// A plain roof `width` wide (x), rising `rise` over a run of `run`, from the low edge at -z
+        /// to the high edge at +z. The slab's centre plane runs through both edges, like the centre
+        /// lines of beams and diagonal beams, so a roof, a diagonal and a beam snapped to the same
+        /// point all cross there. On a wall top it sits half its thickness into the wall.
+        /// </summary>
+        static PieceDef Roof(string name, float width, float run, float rise)
         {
-            // Rises `size` over a run of `size`, from the low edge at -z to the high edge at +z.
-            // The slab's underside runs through both edges, so it rests on the wall, beam or floor
-            // it snaps to instead of cutting into it, and two slopes meet cleanly at a ridge.
+            float w = width / 2f, r = run / 2f;
+            var snaps = new List<Vector3>(Line(new Vector3(-w, 0, -r), new Vector3(w, 0, -r)));
+            snaps.AddRange(Line(new Vector3(-w, rise, r), new Vector3(w, rise, r)));
+            return new PieceDef(name, new[] { RoofSlab(width, run, rise, 0f, Vector3.zero) }, snaps.ToArray());
+        }
+
+        /// <summary>
+        /// The slab of a roof `width` wide rising `rise` over `run`, towards `yaw` (0 = +z),
+        /// optionally cut to the triangle given by `cut` (in the slab's own axes: x across, z up the
+        /// slope). Its centre plane runs through the low and high edges.
+        /// </summary>
+        static Obb RoofSlab(float width, float run, float rise, float yaw, Vector3 cut)
+        {
+            float pitch = Mathf.Atan2(rise, run) * Mathf.Rad2Deg;
+            Quaternion tilt = Quaternion.Euler(0f, yaw, 0f) * Quaternion.Euler(-pitch, 0f, 0f);
+            float length = Mathf.Sqrt(run * run + rise * rise);
+            return Obb.Wedge(new Vector3(0, rise / 2f, 0), new Vector3(width, Slab, length), tilt, cut);
+        }
+
+        /// <summary>
+        /// A hip corner for a 90° outer corner, `size` square: eaves along -z and -x, rising `rise`
+        /// to a peak at the (+x, +z) corner. Two triangular halves of roof slab, one rising towards
+        /// +z and one towards +x, meeting along the hip (the diagonal). Its sloped sides match
+        /// plain roofs beside it (rising +z along +x, rising +x along +z).
+        /// </summary>
+        static PieceDef RoofOuterCorner(string name, float size, float rise)
+        {
             float h = size / 2f;
-            Quaternion tilt = Quaternion.Euler(-45f, 0f, 0f);
-            Vector3 normal = tilt * Vector3.up;
-            float length = size * Mathf.Sqrt(2f);
-            var slab = new Obb(new Vector3(0, h, 0) + normal * (Slab / 2), new Vector3(size, Slab, length), tilt);
+            Obb[] halves =
+            {
+                RoofSlab(size, size, rise, 0f, new Vector3(-1, 0, 1)),   // plan triangle (-h,-h) (h,-h) (h,h)
+                RoofSlab(size, size, rise, 90f, new Vector3(1, 0, 1)),   // plan triangle (-h,-h) (-h,h) (h,h)
+            };
             var snaps = new List<Vector3>(Line(new Vector3(-h, 0, -h), new Vector3(h, 0, -h)));
-            snaps.AddRange(Line(new Vector3(-h, size, h), new Vector3(h, size, h)));
-            return new PieceDef(name, new[] { slab }, snaps.ToArray());
+            snaps.AddRange(Line(new Vector3(-h, 0, -h), new Vector3(-h, 0, h)).Skip(1));
+            snaps.Add(new Vector3(h, rise, h));
+            return new PieceDef(name, halves, snaps.ToArray());
+        }
+
+        /// <summary>
+        /// A valley corner for a 90° inner corner, `size` square: low only at the (-x, -z) corner,
+        /// rising `rise` to the high edges along +x and +z. Two triangular halves meeting along the
+        /// valley (the diagonal); plain roofs rising +z continue it along -x, and roofs rising +x along -z.
+        /// </summary>
+        static PieceDef RoofInnerCorner(string name, float size, float rise)
+        {
+            float h = size / 2f;
+            Obb[] halves =
+            {
+                RoofSlab(size, size, rise, 0f, new Vector3(1, 0, -1)),   // plan triangle (-h,-h) (-h,h) (h,h)
+                RoofSlab(size, size, rise, 90f, new Vector3(-1, 0, -1)), // plan triangle (-h,-h) (h,-h) (h,h)
+            };
+            var snaps = new List<Vector3> { new Vector3(-h, 0, -h) };
+            snaps.AddRange(Line(new Vector3(h, rise, -h), new Vector3(h, rise, h)));
+            snaps.AddRange(Line(new Vector3(h, rise, h), new Vector3(-h, rise, h)).Skip(1));
+            return new PieceDef(name, halves, snaps.ToArray());
+        }
+
+        /// <summary>
+        /// A ridge cap for roofs of an odd width, `size` square: rises `rise` from both edges (along
+        /// z) to a ridge along x, so it fits between two plain roofs whose high edges are `size`
+        /// apart. Each half reaches a little past the ridge so their top faces meet: all the way at
+        /// 45° and flatter; on steeper pitches only as far as stays hidden inside the other half.
+        /// </summary>
+        static PieceDef RoofCap(string name, float size, float rise)
+        {
+            float half = size / 2f;
+            float tan = rise / half;
+            float past = Slab / 2f * Mathf.Min(tan, 1f / tan);
+            float pitch = Mathf.Atan(tan) * Mathf.Rad2Deg;
+            float length = Mathf.Sqrt(half * half + rise * rise) + past;
+            var boxes = new Obb[2];
+            for (int side = 0; side < 2; side++)
+            {
+                bool front = side == 0;   // the -z half rises towards +z, the +z half towards -z
+                Quaternion tilt = Quaternion.Euler(front ? -pitch : pitch, 0f, 0f);
+                Vector3 upSlope = tilt * (front ? Vector3.forward : Vector3.back);
+                Vector3 mid = new Vector3(0, rise / 2f, front ? -half / 2f : half / 2f) + upSlope * (past / 2f);
+                boxes[side] = new Obb(mid, new Vector3(size, Slab, length), tilt);
+            }
+            var snaps = new List<Vector3>(Line(new Vector3(-half, 0, -half), new Vector3(half, 0, -half)));
+            snaps.AddRange(Line(new Vector3(-half, 0, half), new Vector3(half, 0, half)));
+            return new PieceDef(name, boxes, snaps.ToArray());
+        }
+
+        /// <summary>
+        /// A right-triangle wall that fills the gable under one roof slope: `run` along the bottom
+        /// (x), rising `rise` at +x, like a wall cut along its diagonal (rotate it 180° for the other
+        /// slope). Snap points along all three edges, on the grid.
+        /// </summary>
+        static PieceDef GableWall(string name, float run, float rise)
+        {
+            float h = run / 2f;
+            var shape = Obb.Wedge(new Vector3(0, rise / 2f, 0), new Vector3(run, rise, Slab), Quaternion.identity, new Vector3(-1, 1, 0));
+            var snaps = new List<Vector3>(Line(new Vector3(-h, 0, 0), new Vector3(h, 0, 0)));
+            for (float y = Step; y < rise - 1e-4f; y += Step)       // up the tall side, every metre
+                snaps.Add(new Vector3(h, y, 0));
+            snaps.Add(new Vector3(h, rise, 0));
+            int steps = Mathf.RoundToInt(run / Step);
+            for (int k = 1; k < steps; k++)                         // the slope, between its ends
+                snaps.Add(new Vector3(-h + k * Step, rise * k / steps, 0));
+            return new PieceDef(name, new[] { shape }, snaps.ToArray());
+        }
+
+        /// <summary>
+        /// The small gable under a ridge cap: an isosceles triangle `size` wide and `rise` tall, made
+        /// of two right-triangle halves. Snaps by its bottom edge, e.g. onto a wall between two gable walls.
+        /// </summary>
+        static PieceDef GableCap(string name, float size, float rise)
+        {
+            float q = size / 4f;
+            var halfSize = new Vector3(size / 2f, rise, Slab);
+            Obb[] halves =
+            {
+                Obb.Wedge(new Vector3(-q, rise / 2f, 0), halfSize, Quaternion.identity, new Vector3(-1, 1, 0)), // high at the middle
+                Obb.Wedge(new Vector3(q, rise / 2f, 0), halfSize, Quaternion.identity, new Vector3(1, 1, 0)),
+            };
+            return new PieceDef(name, halves, Line(new Vector3(-size / 2f, 0, 0), new Vector3(size / 2f, 0, 0)));
         }
 
         /// <summary>

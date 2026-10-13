@@ -147,10 +147,19 @@ namespace ShooterMashup.Building
                 child.transform.SetParent(root.transform, false);
                 child.transform.localPosition = box.center;
                 child.transform.localRotation = box.rotation;
-                child.AddComponent<MeshFilter>().sharedMesh = BuildMeshes.Box(box.Size);
+                Mesh mesh = BuildMeshes.For(box);
+                child.AddComponent<MeshFilter>().sharedMesh = mesh;
                 child.AddComponent<MeshRenderer>().sharedMaterial = material;
-                if (colliders)
+                if (colliders && box.IsWedge)
+                {
+                    var mc = child.AddComponent<MeshCollider>();
+                    mc.convex = true;          // the player's box sweeps need a convex collider
+                    mc.sharedMesh = mesh;
+                }
+                else if (colliders)
+                {
                     child.AddComponent<BoxCollider>().size = box.Size;
+                }
             }
             return root;
         }

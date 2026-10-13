@@ -46,6 +46,7 @@ namespace ShooterMashup.Building
         MaterialPropertyBlock block;
 
         bool menuOpen;
+        Vector2 menuScroll;
         int selected;
         BuildMaterial material;
         float yaw;
@@ -532,14 +533,17 @@ namespace ShooterMashup.Building
 
         void DrawMenu()
         {
-            const int columns = 6;
-            const float tile = 132f, tileHeight = 158f;
-            // Sized for the material with the most pieces, so switching tabs doesn't resize it.
+            const float tile = 132f, tileHeight = 158f, margin = 40f, scrollBar = 20f;
+            // Up to 6 columns, fewer on a narrow screen.
+            int columns = Mathf.Clamp(Mathf.FloorToInt((Screen.width - 2 * margin - 32f - scrollBar) / (tile + 4f)), 2, 6);
+            // Sized for the material with the most pieces, so switching tabs doesn't resize it, but
+            // no taller than the screen: the pieces scroll (mouse wheel or the bar) when they don't fit.
             int most = 0;
             foreach (BuildMaterial m in System.Enum.GetValues(typeof(BuildMaterial)))
                 most = Mathf.Max(most, PieceCatalog.Pieces(m).Count);
             int rows = (most + columns - 1) / columns;
-            float width = columns * (tile + 4f) + 32f, height = rows * (tileHeight + 4f) + 130f;
+            float width = columns * (tile + 4f) + 32f + scrollBar;
+            float height = Mathf.Min(rows * (tileHeight + 4f) + 130f, Screen.height - 2 * margin);
             var area = new Rect((Screen.width - width) / 2f, (Screen.height - height) / 2f, width, height);
             GUI.Box(area, "");
             GUILayout.BeginArea(new Rect(area.x + 16, area.y + 12, width - 32, height - 24));
@@ -551,6 +555,7 @@ namespace ShooterMashup.Building
             GUILayout.Space(10);
 
             List<int> pieces = PieceCatalog.Pieces(material);
+            menuScroll = GUILayout.BeginScrollView(menuScroll, false, false);
             for (int i = 0; i < pieces.Count; i += columns)
             {
                 GUILayout.BeginHorizontal();
@@ -563,6 +568,7 @@ namespace ShooterMashup.Building
                 }
                 GUILayout.EndHorizontal();
             }
+            GUILayout.EndScrollView();
 
             GUILayout.FlexibleSpace();
             GUILayout.Label("<color=#aaa>Middle click or Esc to close</color>", style);
