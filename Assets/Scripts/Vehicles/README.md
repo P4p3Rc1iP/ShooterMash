@@ -30,6 +30,8 @@ a flip and a loop) by the arrival.
 | W / S | throttle / brake, then reverse |
 | A / D | steer |
 | Space | handbrake (locks the rear wheels: they slide) |
+| T | traction control on / off (off: the engine can spin the wheels: burnouts, power slides) |
+| F5 | telemetry overlay (for tuning) |
 | V | camera: follow (default) → first person → free orbit (scroll zooms) |
 | L | lift tool |
 
@@ -68,6 +70,12 @@ VehicleTuning.cs      every driving number, with tooltips
 Lift.cs               the lift: a platform; holds one vehicle frozen; builds new vehicles
 LiftTool.cs           the player's lift tool (L)
 VehicleDriver.cs      sitting, driving controls and the three cameras
+EngineRevs.cs         revs and an automatic gearbox, for show (rev counter, engine sound)
+VehicleEffects.cs     tyre smoke where tyres slide; SkidMarks.cs: the marks they leave
+VehicleAudio.cs       engine, tyre squeal and impact sounds, synthesised at start (no sound files)
+VehicleHud.cs         the driver's gauges: speed, gear, rev bar, TC light, what each wheel is doing
+VehicleTelemetry.cs   the F5 tuning overlay
+VehicleSoundBank.cs   recorded engine loops per engine piece (the asset is in Assets/Audio); VehicleSounds puts it in use
 VehicleShowcase.cs    the demo designs, built on a lift and dropped (the semi's trailer is coupled)
 VehicleAutopilot.cs   drives a vehicle round a path (the rally truck), optionally only with a rider
 StuntDriver.cs        drives a stunt once someone stands on it, then resets (crash, flip, loop)
@@ -105,16 +113,39 @@ Riders.cs             is a player riding a vehicle?
   - steering: at speed full lock asks for about what the tyres can give, and grows by the slip
     angle while sliding, so you can always catch a slide (countersteer);
   - traction control: a driven wheel is never pushed past its grip by the engine alone (set
-    `tractionSlack` above 0 for wheelspin, -1 to turn it off);
+    `tractionSlack` above 0 for wheelspin, -1 to turn it off; T toggles it while driving);
   - springs sized per wheel from where the weight sits (also a trailer's weight on its tractor),
     so a loaded truck sits level;
-  - the centre of mass is held low, grip forces act partway up towards it (less body roll), the
-    body levels itself to the ground and turns upright in the air, a little downforce (at most
-    4 m/s²), extra gravity, a low-friction body (scrapes skid instead of braking hard), and it
-    holds still when parked.
+  - body roll is mostly real: the springs resist leaning less than bouncing (`rollStiffness`
+    0.3: our vehicles are twice as wide as real ones, so they'd hardly lean otherwise), the
+    centre of mass is only held down for very tall builds, and a rollover assist pushes back
+    past 30° of lean. A tall, loaded van leans hard and lifts a wheel in a fast corner;
+  - the body turns upright in the air, a little downforce (at most 4 m/s²), extra gravity, a
+    low-friction body (scrapes skid instead of braking hard), and it holds still when parked.
+- **Keyboard.** The keys are on or off, so the controls build up (`VehicleDriver`): the throttle
+  opens over half a second (tap W to feather it) and closes fast, the brake comes on faster,
+  and the steering turns in more slowly the faster you go and comes back quickly.
 - **Trailers.** A kingpin couples to a fifth wheel with a joint: free to turn, pitching over
   crests, rolling a little. A coupled trailer brakes and parks with its tractor. Putting either
   on a lift uncouples them; there's no key to uncouple yet.
+- **What you see and hear** (so you can read the tyres): sliding tyres smoke and leave skid
+  marks, more the faster they slide (a little mist on ice), in the ground's colour (from its
+  `PmSurface` type, or its material), and squeal. The HUD shows speed, gear and a rev bar that
+  goes red at the redline and flashes on the limiter, a TC light while traction control holds
+  the wheels back, a steering strip (where the front wheels point against where the car goes:
+  line them up to steer along a slide; the band is the lock there is), and the wheels from
+  above: green gripping, orange sliding, red spinning under power, blue locked, grey in the
+  air, driven ones edged white. F5 shows a telemetry overlay for tuning (graphs of speed, revs,
+  inputs, slip, lean; per wheel its load, grip used and slip). The camera widens its view with
+  speed, shakes on hard jolts and tilts into slides. The revs come from an automatic gearbox
+  that's only for show (the drive force doesn't use it): they follow the driven wheels, so
+  wheelspin or a wheel in the air flares them, and the clutch slips pulling away.
+- **Sound.** Engines only run while someone (or an autopilot) is actually driving. Each engine
+  piece plays a recorded loop from the sound bank (`Assets/Audio/Vehicle sounds.asset`: swap
+  clips and pitch ranges in the inspector), stretched from idle to the redline, muffled off the
+  throttle; the loops' silent ends (MP3 padding) are trimmed and the seam crossfaded. Without a
+  loop it falls back to a made-up one. Lifting off at high revs pops the exhaust (with flames);
+  tyres squeal as they slide; the body thumps when it hits something.
 - **The lift** freezes the vehicle (kinematic body) and sets its pose; taking it away makes the
   body dynamic again. Putting a vehicle on it rests the vehicle's lowest point (usually the
   tyres at full droop) on the platform; adding parts that hang lower raises it.
@@ -131,7 +162,8 @@ Riders.cs             is a player riding a vehicle?
   off-road area). Flipping or looping drops you: past 45° of tilt you're no longer standing.
 - **Multiplayer:** planned as driver authority: the driver's machine runs the vehicle's physics
   and others see a smoothed copy. Rigid-body physics can't be predicted like player movement.
-- No gears, clutch, fuel or engine sound; no differential (the drive is shared equally).
+- No real gears (the gearbox is only for show), clutch, fuel or ignition (an engine starts when
+  someone drives); no differential (the drive is shared equally).
 - No crash damage; pieces don't break off. Vehicles don't damage buildings.
 - No uncouple key for trailers, and no landing legs: an uncoupled trailer rests on its nose.
 - Vehicles only drive on colliders (fine for voxel terrain with colliders).

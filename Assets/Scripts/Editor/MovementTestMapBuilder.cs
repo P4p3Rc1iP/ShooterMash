@@ -114,6 +114,7 @@ namespace ShooterMashup.EditorTools
             area = null;
 
             BuildPlayer(HubArrival + new Vector3(0, 0.65f, 0));
+            BuildVehicleSounds();
 
             AssetDatabase.SaveAssets();
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -476,6 +477,43 @@ namespace ShooterMashup.EditorTools
             truck.buggyYaw = 90f;
             Label("rally truck: stand on the back and it drives\n(up to 150 km/h); step off and it stops",
                 new Vector3(0f, 4.5f, 11f), parent, 180f);
+        }
+
+        const string SoundBankPath = "Assets/Audio/Vehicle sounds.asset";
+
+        /// <summary>
+        /// The engine sound bank: made with a first guess of which recorded loop suits which
+        /// engine if it doesn't exist yet (then it's left alone, so changes made in the inspector
+        /// stay), and put in use by a VehicleSounds object.
+        /// </summary>
+        static void BuildVehicleSounds()
+        {
+            var bank = AssetDatabase.LoadAssetAtPath<VehicleSoundBank>(SoundBankPath);
+            if (bank == null)
+            {
+                bank = ScriptableObject.CreateInstance<VehicleSoundBank>();
+                const string loops = "Assets/Audio/Motor Loops/";
+                (string engine, string file, float idle, float redline, float volume)[] guesses =
+                {
+                    ("Engine 4-cyl", "freesound_community-motor-loop-3-83478.mp3", 0.75f, 2.2f, 1f),
+                    ("Engine V6", "freesound_community-motor-loop-2-103532.mp3", 0.7f, 2f, 1f),
+                    ("Engine V8", "freesound_community-engine-47745.mp3", 0.75f, 2.3f, 0.8f),
+                    ("Engine diesel", "freesound_community-bus-engine-looped-88729.mp3", 0.8f, 1.7f, 0.9f),
+                };
+                foreach ((string engine, string file, float idle, float redline, float volume) in guesses)
+                    bank.engines.Add(new VehicleSoundBank.EngineSound
+                    {
+                        engine = engine,
+                        clip = AssetDatabase.LoadAssetAtPath<AudioClip>(loops + file),
+                        idlePitch = idle,
+                        redlinePitch = redline,
+                        volume = volume,
+                    });
+                AssetDatabase.CreateAsset(bank, SoundBankPath);
+            }
+            var go = new GameObject("Vehicle sounds");
+            go.transform.SetParent(root, false);
+            go.AddComponent<VehicleSounds>().bank = bank;
         }
 
         /// <summary>

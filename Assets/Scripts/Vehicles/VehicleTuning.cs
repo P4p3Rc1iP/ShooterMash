@@ -49,20 +49,26 @@ namespace ShooterMashup.Vehicles
         public float maxSteer = 32f;
         [Tooltip("Steering assist: at speed, full lock turns as tightly as the tyres allow times this (more: more understeer, and oversteer with power).")]
         public float steerGripMargin = 1f;
-        [Tooltip("How fast the steering follows the keys (per second).")]
-        public float steerRate = 5f;
+        [Tooltip("How fast the steering follows the input (per second). The driver's keyboard input is shaped on top of this (VehicleDriver).")]
+        public float steerRate = 8f;
         [Tooltip("Grip on slick surfaces (ice, marked SurfaceFlags.Slick), as a fraction of normal.")]
         [Range(0f, 1f)] public float slickGrip = 0.15f;
 
         [Header("Assists")]
-        [Tooltip("The centre of mass is held no higher than this above the wheel centres (m), so tall builds don't tip over.")]
-        public float maxCenterOfMassAboveWheels = 0.2f;
+        [Tooltip("The centre of mass is held no higher than this above the wheel centres (m), so very tall builds don't tip over. Less: less body roll.")]
+        public float maxCenterOfMassAboveWheels = 1.5f;
         [Tooltip("Grip forces act this fraction of the way from the tyre contact up to the centre of mass: less body roll in corners.")]
-        [Range(0f, 1f)] public float gripForceHeight = 0.6f;
+        [Range(0f, 1f)] public float gripForceHeight = 0f;
         [Tooltip("How hard the body levels itself to the ground while wheels touch it (1/s²).")]
-        public float uprightStrength = 5f;
+        public float uprightStrength = 0.5f;
         [Tooltip("Damps rolling and pitching while wheels touch the ground (1/s).")]
-        public float uprightDamping = 2.5f;
+        public float uprightDamping = 1.2f;
+        [Tooltip("Roll stiffness: how hard the springs resist leaning (a difference in compression across an axle), as a fraction of how hard they resist bouncing. Our vehicles are about twice as wide as real ones, so their springs alone hardly let them lean; below 1 they roll more. Above 1 it's an anti-roll bar.")]
+        public float rollStiffness = 0.3f;
+        [Tooltip("Rollover assist: past this lean from the ground (degrees), the body is pushed back towards its wheels.")]
+        public float rolloverAssistAngle = 30f;
+        [Tooltip("Rollover assist strength (1/s² per degree past the angle). 0: off, so tall builds can roll.")]
+        public float rolloverAssist = 0.6f;
         [Tooltip("How hard the body turns upright in the air (1/s²), so jumps land on the wheels.")]
         public float airUpright = 1.5f;
         [Tooltip("Pushes the vehicle down at speed (m/s² per (m/s)²). It adds grip, so keep it small.")]

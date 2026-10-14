@@ -36,8 +36,13 @@ namespace ShooterMashup.Vehicles
             public bool grounded;
             public RaycastHit hit;        // this step's suspension ray
             public bool sliding;          // the tyre is sliding: it grips less until it stops
+            public bool spinning, locked, slick; // why it slides, and on what
+            public float slip;            // how fast the tyre slides over the ground (m/s)
+            public float treadSpeed;      // how fast the tread turns (m/s): the ground speed plus any wheelspin
+            public float load, capacity, force; // this step (N)
             public float weightShare;     // the fraction of the vehicle's weight it carries standing still
             public float fifthWheelShare; // the fraction of a load on the fifth wheel it carries
+            public Wheel partner;         // the wheel across the axle from it, for the anti-roll bar
         }
 
         static readonly RaycastHit[] Hits = new RaycastHit[16];
@@ -95,6 +100,56 @@ namespace ShooterMashup.Vehicles
         public Vehicle TowedBy { get; private set; }
         /// <summary>The trailer this one is towing, or null.</summary>
         public Vehicle Towing { get; private set; }
+        /// <summary>The engine's revs and (for show) gear: for the rev counter and the sound.</summary>
+        public EngineRevs Revs { get; } = new EngineRevs();
+        /// <summary>Someone or something is driving it (the engine runs).</summary>
+        public bool Controlled => Driver != null || Autopilot;
+        /// <summary>The throttle as given: -1..1.</summary>
+        public float Throttle => throttle;
+        /// <summary>Traction control held a driven wheel back this step.</summary>
+        public bool TractionControlActive { get; private set; }
+        /// <summary>The engine runs: someone sits in it, or the autopilot is actually driving it.</summary>
+        public bool EngineRunning => power > 0f && (Driver != null || Autopilot && (throttle != 0f || Mathf.Abs(ForwardSpeed) > 1f));
+        /// <summary>How far the body leans sideways (degrees, positive: to the right).</summary>
+        public float RollAngle { get; private set; }
+        /// <summary>The angle between where it points and where it goes (degrees, positive: sliding to the right).</summary>
+        public float SlipAngle { get; private set; }
+        /// <summary>The front wheels' steering angle (degrees, positive right) and the most they could turn now.</summary>
+        public float SteerAngle { get; private set; }
+        public float SteerLock { get; private set; }
+        /// <summary>The name of its most powerful engine piece (for its sound), or null.</summary>
+        public string EngineName { get; private set; }
+        /// <summary>Where the engines' exhausts come out, in the vehicle's space (for backfires).</summary>
+        public IReadOnlyList<Vector3> Exhausts => exhausts;
+        readonly List<Vector3> exhausts = new List<Vector3>();
+
+        /// <summary>What a wheel is doing, for effects and the HUD.</summary>
+        public struct WheelState
+        {
+            public bool grounded, driven, sliding;
+            public bool spinning;      // sliding because it's driven harder than it grips
+            public bool locked;        // braked or parked, skidding
+            public bool slick;         // on ice
+            public float slip;         // how fast the tyre slides over the ground (m/s)
+            public Vector3 contact, normal;
+            public Collider ground;
+            public Vector3 localAnchor; // in the vehicle's space
+            public float width;
+            public float load, capacity, force; // N: on the spring, what the tyre could give, what it gives
+        }
+
+        /// <summary>The wheels' states this physics step.</summary>
+        public WheelState GetWheel(int i)
+        {
+            Wheel w = wheels[i];
+            return new WheelState
+            {
+                grounded = w.grounded, driven = w.spec.driven, sliding = w.sliding, spinning = w.spinning,
+                locked = w.locked, slick = w.slick, slip = w.slip, contact = w.hit.point, normal = w.hit.normal,
+                ground = w.grounded ? w.hit.collider : null, localAnchor = w.anchor, width = w.spec.width,
+                load = w.grounded ? w.load : 0f, capacity = w.grounded ? w.capacity : 0f, force = w.grounded ? w.force : 0f,
+            };
+        }
 
         /// <summary>A new, empty vehicle at a frame (a lift's top), frozen until released.</summary>
         public static Vehicle Create(StructureManager look, Transform at)
@@ -122,6 +177,8 @@ namespace ShooterMashup.Vehicles
             views = new PieceViews(system, transform, look);
             views.Rebuilt += Rebuild;
             All.Add(this);
+            gameObject.AddComponent<VehicleAudio>();     // before the effects: they listen for its backfires
+            gameObject.AddComponent<VehicleEffects>();
         }
 
         void OnDestroy()
@@ -293,6 +350,9 @@ namespace ShooterMashup.Vehicles
             forward = Vector3.forward;
             power = pull = 0f;
             float topSpeed = 0f;
+            EngineSpec loudest = null;
+            EngineName = null;
+            exhausts.Clear();
             hasKingpin = hasFifthWheel = false;
             float mass = 0f;
             Vector3 moment = Vector3.zero;
@@ -312,6 +372,14 @@ namespace ShooterMashup.Vehicles
                     power += p.def.Engine.power;
                     pull += p.def.Engine.pull;
                     topSpeed = Mathf.Max(topSpeed, p.def.Engine.topSpeed);
+                    if (loudest == null || p.def.Engine.power > loudest.power)
+                        loudest = p.def.Engine;
+                    if (loudest == p.def.Engine)
+                        EngineName = p.def.name;
+                    // The exhaust: the top of the engine block's back end.
+                    Obb block = p.boxes[0];
+                    Vector3 back = p.record.rotation * Vector3.back;
+                    exhausts.Add(block.center + back * (block.Bounds.extents.z * 0.9f) + Vector3.up * block.Bounds.extents.y);
                 }
                 if (p.def.Coupling != null)
                 {
@@ -372,6 +440,10 @@ namespace ShooterMashup.Vehicles
                 topSpeed = 26f;
             }
             TopSpeed = topSpeed > 0f ? topSpeed : 26f;
+            if (loudest != null)
+                Revs.Configure(loudest.idle, loudest.redline, loudest.cylinders, loudest.gears, TopSpeed);
+            else
+                Revs.Configure(850f, 6500f, 4, 5, TopSpeed);
             body.centerOfMass = centerOfMass;
             body.inertiaTensor = Inertia(ids, centerOfMass, body.mass);
             body.inertiaTensorRotation = Quaternion.identity;
@@ -441,6 +513,24 @@ namespace ShooterMashup.Vehicles
             }
             wheelbase = wheels.Count > 1 ? Mathf.Max(maxAlong - minAlong, 0.5f) : 3f;
             WeightShares();
+            // Anti-roll bars: each wheel pairs with the one across the same axle.
+            Vector3 across = Vector3.Cross(Vector3.up, forward);
+            foreach (Wheel w in wheels)
+            {
+                w.partner = null;
+                float best = 0.5f;
+                foreach (Wheel o in wheels)
+                {
+                    if (o == w || Mathf.Sign(Vector3.Dot(o.anchor - centerOfMass, across)) == Mathf.Sign(Vector3.Dot(w.anchor - centerOfMass, across)))
+                        continue;
+                    float along = Mathf.Abs(Vector3.Dot(o.anchor - w.anchor, forward));
+                    if (along < best)
+                    {
+                        best = along;
+                        w.partner = o;
+                    }
+                }
+            }
             Bounds extent = LocalBounds();
             frontalArea = Mathf.Max(extent.size.x * extent.size.y, 0.5f);
             // The front half of the wheels steer, the frontmost the most: works whatever the layout.
@@ -555,6 +645,7 @@ namespace ShooterMashup.Vehicles
             int n = wheels.Count;
             WheelsOnGround = 0;
             WheelsSliding = 0;
+            TractionControlActive = false;
             if (n == 0)
                 return;
 
@@ -594,6 +685,8 @@ namespace ShooterMashup.Vehicles
                 float slipAngle = Vector3.Angle(Mathf.Sign(speed) * fwdWorld, flatVelocity);
                 maxSteer = Mathf.Min(maxSteer + slipAngle, t.maxSteer);  // the grip limit, measured from where it's going
             }
+            SteerLock = maxSteer;
+            SteerAngle = steer * maxSteer;
             Vector3 com = body.worldCenterOfMass;
             Vector3 normalSum = Vector3.zero;
 
@@ -624,8 +717,14 @@ namespace ShooterMashup.Vehicles
                 w.steerAngle = w.steerFactor * steer * maxSteer;
                 if (!w.grounded)
                 {
-                    w.sliding = false;
+                    w.sliding = w.spinning = w.locked = false;
+                    w.slip = 0f;
                     w.compression = Mathf.MoveTowards(w.compression, 0f, dt * 4f);
+                    // In the air a driven wheel spins up on the throttle, and otherwise slowly runs down.
+                    float free = w.spec.driven && controlled && throttleNow != 0f && !Parked ? Mathf.Sign(throttleNow) * TopSpeed
+                        : Parked ? 0f : w.treadSpeed * 0.98f;
+                    w.treadSpeed = Mathf.MoveTowards(w.treadSpeed, free, 25f * dt);
+                    w.spin += w.spinSign * w.treadSpeed / w.spec.radius * Mathf.Rad2Deg * dt;
                     continue;
                 }
                 RaycastHit hit = w.hit;
@@ -642,6 +741,10 @@ namespace ShooterMashup.Vehicles
                 float velocity = (compression - w.compression) * travel / dt;
                 w.compression = compression;
                 float load = Mathf.Max(0f, k * compression * travel + c * velocity);
+                // Roll stiffness: the springs resist the difference in compression across an axle
+                // rollStiffness times as much as they resist both compressing (more: an anti-roll bar).
+                if (w.partner != null)
+                    load = Mathf.Max(0f, load + (t.rollStiffness - 1f) * k * travel * (compression - w.partner.compression) / 2f);
                 if (raw > 1f)
                     load += k * (raw - 1f) * travel * 4f;              // bump stop
                 body.AddForceAtPosition(up * load, hit.point);
@@ -670,8 +773,11 @@ namespace ShooterMashup.Vehicles
                     // Assist (traction control): a driven wheel is never pushed more than a bit past its grip.
                     float push = w.spec.driven ? drive * w.driveFactor : 0f;
                     float most = capacity * (w.sliding ? t.slideGrip : 1f) * (1f + t.tractionSlack);
-                    if (t.tractionSlack >= 0f)
+                    if (t.tractionSlack >= 0f && Mathf.Abs(push) > most)
+                    {
                         push = Mathf.Clamp(push, -most, most);
+                        TractionControlActive = true;
+                    }
                     // Rolling resistance (a fraction of the load), and engine braking off the throttle.
                     float rolling = Mathf.Min(t.rollingResistance * load, Mathf.Abs(vRoll) * share / dt);
                     longitudinal = push - Mathf.Sign(vRoll) * rolling
@@ -689,15 +795,18 @@ namespace ShooterMashup.Vehicles
                     w.sliding = false;
                 float available = w.sliding ? capacity * t.slideGrip : capacity;
                 Vector2 force = demand;
+                bool locked = Parked || Braking || (handbrake && controlled && rear);
+                float spinUp = 0f;   // how much faster than the ground the tread turns (wheelspin)
                 if (asked > available)
                 {
                     // Too much: the tyre slides, and its force points along the slip. Sideways that's
                     // how fast it slides sideways; lengthways, a locked wheel skids at the ground
                     // speed, and a spinning one spins up more the harder it's driven. So a wheel
                     // spinning under power has little sideways grip left: the back steps out.
-                    bool locked = Parked || Braking || (handbrake && controlled && rear);
                     float slipAlong = locked ? Mathf.Abs(vRoll)
                         : Mathf.Abs(longitudinal) / Mathf.Max(available, 1f) * t.wheelspinSlip;
+                    if (!locked && w.spec.driven && drive != 0f)
+                        spinUp = slipAlong;
                     var slip = new Vector2(Mathf.Abs(vSide), slipAlong);
                     if (slip.sqrMagnitude < 1e-6f)
                         force = demand * (available / asked);
@@ -716,21 +825,47 @@ namespace ShooterMashup.Vehicles
                 // Assist: grip acts partway up towards the centre of mass, so corners roll the body less.
                 Vector3 at = hit.point + up * (Vector3.Dot(com - hit.point, up) * t.gripForceHeight);
                 body.AddForceAtPosition(side * force.x + rollOnGround * force.y, at);
+                w.load = load;
+                w.capacity = capacity;
+                w.force = force.magnitude;
 
-                // The tyre turns with the ground, faster when it spins up under power, not at all when locked.
-                float wheelSpeed = vRoll;
-                if (w.sliding && longitudinal != 0f && Mathf.Abs(longitudinal) > Mathf.Abs(lateral))
-                    wheelSpeed = w.spec.driven && drive != 0f ? vRoll + Mathf.Sign(drive) * 8f : 0f;
-                w.spin += w.spinSign * wheelSpeed / w.spec.radius * Mathf.Rad2Deg * dt;
+                // What it's doing, for the effects, the HUD and the revs. The tread turns with the
+                // ground, faster when it spins up under power, not at all when it's locked and skidding.
+                w.slick = capacity > 0f && IsSlick(hit.collider);
+                w.spinning = w.sliding && spinUp > 0f;
+                w.locked = w.sliding && locked && Mathf.Abs(vRoll) > 0.5f;
+                w.treadSpeed = w.locked ? 0f : vRoll + Mathf.Sign(drive) * spinUp;
+                w.slip = w.sliding ? new Vector2(vSide, w.treadSpeed - vRoll).magnitude : 0f;
+                w.spin += w.spinSign * w.treadSpeed / w.spec.radius * Mathf.Rad2Deg * dt;
             }
 
-            // Assists: level the body to the ground while wheels touch it, upright in the air.
+            // The revs follow the driven wheels' treads (wheelspin flares them), in the air they run free.
+            float tread = 0f;
+            int driven = 0;
+            foreach (Wheel w in wheels)
+                if (w.spec.driven)
+                {
+                    tread += w.treadSpeed;
+                    driven++;
+                }
+            bool pushing = !Parked && !Braking && throttleNow != 0f;
+            Revs.Update(dt, speed, driven > 0 ? tread / driven : speed, throttleNow, pushing, drivenOnGround == 0,
+                EngineRunning && driven > 0);
+
+            // Assists: level the body a little to the ground while wheels touch it (most of the roll
+            // is left to the springs and anti-roll bars), catch it near the tipping point (rollover
+            // assist), and turn it upright in the air.
             Vector3 angular = body.angularVelocity;
             Vector3 tumble = angular - up * Vector3.Dot(angular, up);
+            RollAngle = Vector3.SignedAngle(Vector3.ProjectOnPlane(Vector3.up, fwdWorld), up, fwdWorld);
+            SlipAngle = flatVelocity.sqrMagnitude > 4f ? Vector3.SignedAngle(Mathf.Sign(speed) * fwdWorld, flatVelocity, up) : 0f;
             if (WheelsOnGround > 0)
             {
                 Vector3 ground = normalSum.normalized;
-                body.AddTorque(Vector3.Cross(up, ground) * t.uprightStrength - tumble * t.uprightDamping, ForceMode.Acceleration);
+                Vector3 level = Vector3.Cross(up, ground);
+                float lean = Vector3.Angle(up, ground);
+                float catchUp = lean > t.rolloverAssistAngle ? (lean - t.rolloverAssistAngle) * t.rolloverAssist : 0f;
+                body.AddTorque(level * t.uprightStrength + level.normalized * catchUp - tumble * t.uprightDamping, ForceMode.Acceleration);
                 body.AddForce(-up * Mathf.Min(t.downforce * speed * speed, t.maxDownforce), ForceMode.Acceleration);
             }
             else

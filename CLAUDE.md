@@ -166,6 +166,17 @@ Agreed with the owner:
   Six demo designs in a lineup by the rally track (buggy RWD, saloon FWD, van RWD, rally truck
   AWD, heavy 8x8 with 15 t of iron, semi 6x4 with a stone-laden trailer); owner's brief: Mad Max
   off-road/rally, arcade not sim, "too powerful to control" beats "not powerful enough".
+- **Reading the tyres and the feel (2026-10-14):** tyre smoke and skid marks in the ground's
+  colour, squeal, backfires with flames, an engine that only runs while driven (ignition with
+  fuel/resources later), recorded engine loops from a sound bank (`Assets/Audio/Vehicle
+  sounds.asset`, the owner's freesound loops, trimmed and crossfaded) with a synthesised
+  fallback, and a driver HUD (rev bar with redline and limiter, gear, TC light, steering vs slip
+  strip, wheel diagram). F5: telemetry overlay. Camera: FOV with speed, shake on jolts, tilt into
+  slides. The revs and gears are cosmetic (an automatic gearbox that doesn't affect the drive
+  force). T toggles traction control. Keyboard input builds up (throttle 0.5 s, steering slower
+  at speed). Body roll is mostly real now (owner: cars were too rigid; a loaded van should almost
+  roll): `rollStiffness` 0.3, centre of mass only held down for very tall builds, a rollover
+  assist past 30°.
 
 ## To-do / open questions
 

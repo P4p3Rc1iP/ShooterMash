@@ -20,6 +20,18 @@ namespace ShooterMashup.Vehicles
         public float reach = 3f;
         public CameraMode cameraMode = CameraMode.Follow;
 
+        [Header("Keyboard (the keys are on or off, so the controls build up)")]
+        [Tooltip("Seconds from no throttle to full while W is held: tap it to feather the throttle.")]
+        public float throttleRiseTime = 0.5f;
+        [Tooltip("Seconds for the throttle (or brake) to close when the key is let go.")]
+        public float throttleReleaseTime = 0.12f;
+        [Tooltip("Seconds from nothing to full brake while S is held.")]
+        public float brakeRiseTime = 0.2f;
+        [Tooltip("Seconds to turn the wheel to full lock at a standstill, and at 30 m/s and faster (slower, for finer steering).")]
+        public float steerTimeSlow = 0.25f, steerTimeFast = 0.6f;
+        [Tooltip("Seconds for the steering to come back to the middle when the keys are let go.")]
+        public float steerReturnTime = 0.18f;
+
         [Header("Follow camera")]
         [Tooltip("Distance behind the vehicle (m); bigger vehicles push it further out.")]
         public float followDistance = 7f;
@@ -32,6 +44,14 @@ namespace ShooterMashup.Vehicles
 
         [Header("Orbit camera")]
         public float orbitDistance = 9f;
+
+        [Header("Camera feel")]
+        [Tooltip("Extra field of view at speed (degrees), reached at fovSpeed (m/s).")]
+        public float speedFov = 12f, fovSpeed = 45f;
+        [Tooltip("How much a hard jolt (landing, impact) shakes the camera, and how fast it settles (per second).")]
+        public float shakeStrength = 0.04f, shakeDecay = 5f;
+        [Tooltip("The camera tilts into a slide by this fraction of the slip angle (degrees), at most maxTilt.")]
+        public float slideTilt = 0.15f, maxTilt = 8f;
         public float minOrbitDistance = 3f, maxOrbitDistance = 30f;
 
         public Vehicle Vehicle { get; private set; }
@@ -45,6 +65,9 @@ namespace ShooterMashup.Vehicles
         PlayerView view;
 
         float lookYaw, lookPitch, lastInputYaw, lastInputPitch, idle, orbitBaseYaw;
+        float throttleNow, steerNow;          // the shaped keyboard controls
+        float baseFov, shakeAmount, tilt;    // the camera's feel
+        Vector3 lastVelocity;
         Vector3 camPosition, camVelocity;
         bool aimingAtSeat;
         GUIStyle style;
@@ -83,7 +106,17 @@ namespace ShooterMashup.Vehicles
 
             float throttle = (kb.wKey.isPressed || kb.upArrowKey.isPressed ? 1f : 0f) - (kb.sKey.isPressed || kb.downArrowKey.isPressed ? 1f : 0f);
             float steer = (kb.dKey.isPressed || kb.rightArrowKey.isPressed ? 1f : 0f) - (kb.aKey.isPressed || kb.leftArrowKey.isPressed ? 1f : 0f);
-            Vehicle.SetControls(throttle, steer, kb.spaceKey.isPressed);
+            Shape(throttle, steer, Time.deltaTime);
+            Vehicle.SetControls(throttleNow, steerNow, kb.spaceKey.isPressed);
+
+            // T toggles traction control: off, the engine can spin the wheels (burnouts, power slides).
+            // F5: the telemetry overlay (for tuning).
+            if (kb.f5Key.wasPressedThisFrame)
+                VehicleTelemetry.Show = !VehicleTelemetry.Show;
+            VehicleTelemetry.Sample(Vehicle);
+
+            if (kb.tKey.wasPressedThisFrame)
+                Vehicle.tuning.tractionSlack = Vehicle.tuning.tractionSlack < 0f ? 0f : -1f;
 
             if (kb.vKey.wasPressedThisFrame)
             {
@@ -111,6 +144,27 @@ namespace ShooterMashup.Vehicles
             }
             transform.position = SeatWorld(out _);
             UpdateCamera(false);
+        }
+
+        /// <summary>
+        /// Keys are on or off; the controls build up from them. The throttle opens over
+        /// throttleRiseTime (tap W to feather it) and closes quickly; braking comes on faster.
+        /// Steering turns in more slowly the faster you go (finer at speed) and comes back quickly.
+        /// </summary>
+        void Shape(float throttleKeys, float steerKeys, float dt)
+        {
+            float rise = throttleKeys < 0f ? brakeRiseTime : throttleRiseTime;
+            if (throttleKeys == 0f || Mathf.Sign(throttleKeys) != Mathf.Sign(throttleNow) && throttleNow != 0f)
+                throttleNow = Mathf.MoveTowards(throttleNow, 0f, dt / Mathf.Max(throttleReleaseTime, 0.01f));
+            else
+                throttleNow = Mathf.MoveTowards(throttleNow, throttleKeys, dt / Mathf.Max(rise, 0.01f));
+
+            float speed = Vehicle != null ? Mathf.Abs(Vehicle.ForwardSpeed) : 0f;
+            float turnIn = Mathf.Lerp(steerTimeSlow, steerTimeFast, speed / 30f);
+            bool returning = steerKeys == 0f || steerNow != 0f && Mathf.Sign(steerKeys) != Mathf.Sign(steerNow);
+            steerNow = returning
+                ? Mathf.MoveTowards(steerNow, 0f, dt / Mathf.Max(steerReturnTime, 0.01f))
+                : Mathf.MoveTowards(steerNow, steerKeys, dt / Mathf.Max(turnIn, 0.01f));
         }
 
         // ------------------------------------------------------------------ seat
@@ -145,6 +199,10 @@ namespace ShooterMashup.Vehicles
             lastInputPitch = input.Pitch;
             lookYaw = lookPitch = 0f;
             cameraMode = CameraMode.Follow;
+            throttleNow = steerNow = 0f;
+            baseFov = cam.fieldOfView;
+            shakeAmount = tilt = 0f;
+            lastVelocity = v.Body.linearVelocity;
             UpdateCamera(true);
         }
 
@@ -165,6 +223,7 @@ namespace ShooterMashup.Vehicles
             }
             motor.enabled = true;
             if (view != null) view.enabled = true;
+            if (cam != null && baseFov > 0f) cam.fieldOfView = baseFov;
             if (buildTool != null) buildTool.enabled = true;
             if (liftTool != null) liftTool.enabled = true;
             motor.Teleport(feet - Vector3.up * motor.movement.mins.y, yaw, false);
@@ -259,7 +318,38 @@ namespace ShooterMashup.Vehicles
             }
             if (cameraMode != CameraMode.Follow)
                 camPosition = position;
-            cam.transform.SetPositionAndRotation(position, rotation);
+            cam.transform.SetPositionAndRotation(position, rotation * Effects(Time.deltaTime, out Vector3 shake));
+            cam.transform.position += shake;
+        }
+
+        /// <summary>
+        /// The camera's feel: the field of view widens with speed, hard jolts (landings, impacts,
+        /// big bumps: sudden changes in the vehicle's velocity) shake it, and it tilts into a slide.
+        /// Returns the tilt; `shake` is the offset to add.
+        /// </summary>
+        Quaternion Effects(float dt, out Vector3 shake)
+        {
+            shake = Vector3.zero;
+            if (Vehicle == null || dt <= 0f)
+                return Quaternion.identity;
+            float speed = Mathf.Abs(Vehicle.ForwardSpeed);
+            cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, baseFov + speedFov * Mathf.Clamp01(speed / fovSpeed), 1f - Mathf.Exp(-3f * dt));
+
+            Vector3 velocity = Vehicle.Body.linearVelocity;
+            float jolt = (velocity - lastVelocity).magnitude / dt;      // m/s²
+            lastVelocity = velocity;
+            if (jolt > 25f)
+                shakeAmount = Mathf.Max(shakeAmount, Mathf.Min((jolt - 25f) * shakeStrength * 0.02f, 1f));
+            shakeAmount = Mathf.MoveTowards(shakeAmount, 0f, shakeDecay * shakeAmount * dt + 0.01f * dt);
+            if (shakeAmount > 0f)
+            {
+                float t = Time.time * 25f;
+                shake = new Vector3(Mathf.PerlinNoise(t, 0.3f) - 0.5f, Mathf.PerlinNoise(0.7f, t) - 0.5f, 0f) * shakeAmount;
+            }
+
+            float wanted = Mathf.Clamp(-Vehicle.SlipAngle * slideTilt, -maxTilt, maxTilt);
+            tilt = Mathf.Lerp(tilt, wanted, 1f - Mathf.Exp(-4f * dt));
+            return Quaternion.Euler(0f, 0f, tilt);
         }
 
         /// <summary>Pull the camera in front of walls and terrain between it and the vehicle.</summary>
@@ -298,8 +388,12 @@ namespace ShooterMashup.Vehicles
                 : Vehicle.WheelCount == 0 ? "  <color=#ffd966>(no wheels)</color>" : "";
             string text =
                 $"<b>{Vehicle.ForwardSpeed * 3.6f:0} km/h</b>   {Vehicle.Mass:0} kg   wheels on the ground {Vehicle.WheelsOnGround}/{Vehicle.WheelCount}{state}\n" +
-                $"<color=#aaa>W/S throttle and brake, A/D steer, Space handbrake, V camera ({cameraMode}), F get out</color>";
+                $"<color=#aaa>W/S throttle and brake, A/D steer, Space handbrake, T traction control, V camera ({cameraMode}), F get out</color>";
             GUI.Label(new Rect(0, Screen.height - 120, Screen.width, 60), text, style);
+            if (Vehicle.Lift == null && Vehicle.WheelCount > 0)
+                VehicleHud.Draw(Vehicle);
+            if (Vehicle.Lift == null && Vehicle.WheelCount > 0)
+                VehicleTelemetry.Draw(Vehicle);
         }
     }
 }

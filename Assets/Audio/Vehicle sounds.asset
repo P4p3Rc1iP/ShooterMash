@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e33e40c45bf2b54448ec6f27d63cd92e, type: 3}
+  m_Name: Vehicle sounds
+  m_EditorClassIdentifier: ShooterMashup.Vehicles::ShooterMashup.Vehicles.VehicleSoundBank
+  engines:
+  - engine: Engine 4-cyl
+    clip: {fileID: 8300000, guid: 3c79eb96fc76afc4398438ef152dcb95, type: 3}
+    idlePitch: 0.75
+    redlinePitch: 2.2
+    volume: 1
+  - engine: Engine V6
+    clip: {fileID: 8300000, guid: 185eeb0c1b408c441b7dc8871ca3d8e5, type: 3}
+    idlePitch: 0.7
+    redlinePitch: 2
+    volume: 1
+  - engine: Engine V8
+    clip: {fileID: 8300000, guid: f0b71d14db197a247b1de389bd5669e8, type: 3}
+    idlePitch: 0.75
+    redlinePitch: 2.3
+    volume: 0.8
+  - engine: Engine diesel
+    clip: {fileID: 8300000, guid: e2a3baf8f79c85e42a57248dc64744d7, type: 3}
+    idlePitch: 0.8
+    redlinePitch: 1.7
+    volume: 0.9

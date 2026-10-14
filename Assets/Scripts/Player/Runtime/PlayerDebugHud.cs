@@ -66,7 +66,7 @@ namespace ShooterMashup.Player
 
         void OnGUI()
         {
-            if (!show)
+            if (!show || !motor.enabled)   // off while driving a vehicle: it has its own gauges
                 return;
 
             if (style == null)

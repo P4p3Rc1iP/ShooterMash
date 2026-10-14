@@ -114,13 +114,21 @@ namespace ShooterMashup.Building
         public readonly float pull;       // N, the most force at the wheels (low gears)
         public readonly float topSpeed;   // m/s
         public readonly float mass;       // kg (the piece's own mass, whatever its material)
+        // Its character, for the rev counter and the sound (the gearbox is only for show: the drive
+        // force above doesn't depend on it).
+        public readonly float idle, redline; // rpm
+        public readonly int cylinders, gears;
 
-        public EngineSpec(float powerKw, float pullKn, float topSpeed, float mass)
+        public EngineSpec(float powerKw, float pullKn, float topSpeed, float mass, float idle, float redline, int cylinders, int gears)
         {
             power = powerKw * 1000f;
             pull = pullKn * 1000f;
             this.topSpeed = topSpeed;
             this.mass = mass;
+            this.idle = idle;
+            this.redline = redline;
+            this.cylinders = cylinders;
+            this.gears = gears;
         }
     }
 
@@ -247,11 +255,12 @@ namespace ShooterMashup.Building
                 all.Add(WheelPiece(name, radius, width, mass, travel, true, grip).In(wood, iron, scrap));
                 all.Add(WheelPiece($"{name} (free)", radius, width, mass, travel, false, grip).In(wood, iron, scrap));
             }
-            // Engines (size across x up y along z; power kW, pull at the wheels kN, top speed m/s, mass kg).
-            all.Add(EnginePiece("Engine 4-cyl", new Vector3(0.7f, 0.5f, 0.6f), new EngineSpec(130f, 7f, 45f, 130f)).In(wood, iron, scrap));
-            all.Add(EnginePiece("Engine V6", new Vector3(0.8f, 0.55f, 0.8f), new EngineSpec(200f, 10f, 52f, 180f)).In(wood, iron, scrap));
-            all.Add(EnginePiece("Engine V8", new Vector3(0.8f, 0.6f, 1f), new EngineSpec(320f, 14f, 60f, 250f)).In(wood, iron, scrap));
-            all.Add(EnginePiece("Engine diesel", new Vector3(1f, 1f, 1.4f), new EngineSpec(420f, 75f, 30f, 900f)).In(wood, iron, scrap));
+            // Engines (size across x up y along z; power kW, pull at the wheels kN, top speed m/s, mass kg,
+            // idle and redline rpm, cylinders, gears).
+            all.Add(EnginePiece("Engine 4-cyl", new Vector3(0.7f, 0.5f, 0.6f), new EngineSpec(130f, 7f, 45f, 130f, 900f, 7200f, 4, 5)).In(wood, iron, scrap));
+            all.Add(EnginePiece("Engine V6", new Vector3(0.8f, 0.55f, 0.8f), new EngineSpec(200f, 10f, 52f, 180f, 850f, 6800f, 6, 5)).In(wood, iron, scrap));
+            all.Add(EnginePiece("Engine V8", new Vector3(0.8f, 0.6f, 1f), new EngineSpec(320f, 14f, 60f, 250f, 750f, 6400f, 8, 6)).In(wood, iron, scrap));
+            all.Add(EnginePiece("Engine diesel", new Vector3(1f, 1f, 1.4f), new EngineSpec(420f, 75f, 30f, 900f, 600f, 2400f, 6, 8)).In(wood, iron, scrap));
             all.Add(DriverSeat("Driver seat").In(wood, iron, scrap));
             all.Add(CouplingPiece("Fifth wheel", false).In(wood, iron, scrap));
             all.Add(CouplingPiece("Kingpin", true).In(wood, iron, scrap));
