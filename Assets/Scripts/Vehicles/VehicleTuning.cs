@@ -60,7 +60,7 @@ namespace ShooterMashup.Vehicles
         public float maxDownforce = 6f;
         [Tooltip("Extra gravity on vehicles (m/s²), so they feel less floaty.")]
         public float extraGravity = 4f;
-        [Tooltip("The body is frictionless, so scraping the ground or a rock skids instead of braking hard (only the tyres grip).")]
+        [Tooltip("The body has little friction (0.3), so scraping the ground or a rock skids instead of braking hard (the tyres grip).")]
         public bool slipperyBody = true;
 
         [Header("Mass")]

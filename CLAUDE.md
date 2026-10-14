@@ -143,9 +143,16 @@ Agreed with the owner:
   velocity), so a crash throws you forwards and a crest dropping away floats you; a push up into
   you never is (the floor takes it). A sideways throw also lifts you 0.3 x its speed (max 5 m/s):
   ET's ground friction would otherwise stop an 18 m/s slide in ~1.5 m. Bumps rarely pass 2 g, so
-  ordinary riding (race and rally trucks) stays put. The crash test (off-road area) shows it.
-- Vehicle assists added for speed: the body is frictionless (`slipperyBody`, scrapes skid instead
-  of braking hard) and downforce is capped at 6 m/s² (`maxDownforce`; uncapped 0.01 v² squashed
+  ordinary riding (race and rally trucks) stays put. The stunt tests (off-road area) show it.
+- **Flips and loops (tested 2026-10-14):** the rider follows the platform's full rotation, but the
+  player is ET: world gravity, an upright box, floors up to 45°. So past ~45° of tilt you're
+  airborne; while the vehicle is still under you (a straight-down cast) you're swung round with
+  it (unphysical), then let go with its velocity. Flip: dropped at ~80-90° of roll, land beside it.
+  Loop: let go just past vertical and fly up inside the loop (a real rider is pressed onto the
+  deck). The camera only follows yaw, never pitch or roll. Staying on through a loop would need
+  the player simulated in the vehicle's frame (felt gravity, rolling camera): not decided.
+- Vehicle assists added for speed: the body has little friction (0.3, `slipperyBody`; scrapes skid instead
+  of braking hard; none made wrecks slide on their roofs like ice) and downforce is capped at 6 m/s² (`maxDownforce`; uncapped 0.01 v² squashed
   the springs flat at 150 km/h, so the chassis hit every bump). Wheel pieces carry their own
   travel, top speed and power: Wheel 0.5 m (26 m/s), Big wheel 0.75 m (56 m/s, power 2).
 
@@ -231,6 +238,9 @@ Agreed with the owner:
   straights and arcs so it always closes; a race truck laps it at up to 22 m/s (`VehicleAutopilot`
   following the centre line) and stops at the start line each lap so you can ride it), and
   **off-road** (z -200, fourth hub portal: a 1160 m loop with two 400 m bumpy straights; a rally truck on
-  big wheels drives it only while someone stands on it, ~150 km/h on the north straight; and a
-  crash test by the arrival: stand on the cab-less flatbed and it drives 90 km/h into a concrete
-  block narrower than its wheel track, throwing you over it (`CrashTestDriver`, resets itself)).
+  big wheels drives it only while someone stands on it, ~150 km/h on the north straight; and
+  stunt tests by the arrival, each a cab-less flatbed on big wheels that runs once you stand on it
+  and resets itself (`StuntDriver`): a crash into a concrete block narrower than its wheel track
+  (90 km/h, throws you over it), a flip off a kicker under one side (90 km/h, self-levelling off)
+  and a 28 m teardrop loop that shifts 7 m sideways so the exit clears the entry (108 km/h, stiff
+  springs; the truck makes it round, the rider doesn't)).

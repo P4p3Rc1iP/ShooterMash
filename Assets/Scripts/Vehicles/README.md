@@ -68,7 +68,7 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
 - **Assists** (what makes anything drive): the centre of mass is held low, grip forces act
   partway up towards it (less body roll), the body levels itself to the ground and turns
   upright in the air, a little downforce (capped at 6 m/s², or fast vehicles squash their
-  springs flat), extra gravity, a frictionless body (scraping the ground or a rock skids instead
+  springs flat), extra gravity, a low-friction body (scraping the ground or a rock skids instead
   of braking hard: only the tyres grip), and it holds still when parked.
   Acceleration is the same for any weight until engines exist.
 - **The lift** freezes the vehicle (kinematic body) and sets its pose; taking it away makes the
@@ -81,8 +81,10 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
   carried along, and jumps on it land where you took off, even while it turns. Jump off the side
   and you keep its speed; jump on from the ground and you land standing still on it. A truck
   circles behind the spawn hub to try it (`VehicleAutopilot`; sit in it to drive it yourself).
-  Hard jolts (over 2 g) throw you: `CrashTestDriver` drives a cab-less flatbed into a concrete
-  block once you stand on it, then puts it back (crash test in the off-road area).
+  Hard jolts (over 2 g) throw you. `StuntDriver` runs stunts once you stand on a vehicle (a crash
+  into a concrete block, a flip off a one-sided kicker, a loop), steering in the vehicle's own
+  frame so it works upside down, and puts the vehicle back afterwards (stunt tests in the
+  off-road area). Flipping or looping drops you: past 45° of tilt you're no longer standing.
 - **Multiplayer:** planned as driver authority: the driver's machine runs the vehicle's physics
   and others see a smoothed copy. Rigid-body physics can't be predicted like player movement.
 - Two wheel sizes (Wheel, and Big wheel: taller travel, faster, twice the push), one seat, no

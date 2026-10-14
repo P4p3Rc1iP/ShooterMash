@@ -240,15 +240,16 @@ namespace ShooterMashup.Vehicles
         /// <summary>After pieces changed: mass, centre of mass, inertia, wheels and seat.</summary>
         void Rebuild()
         {
-            // Assist: the body skids when it scrapes the ground or a rock, instead of braking hard
-            // on it (only the tyres grip), so bottoming out over bumps doesn't stop it dead.
+            // Assist: the body has little friction, so scraping the ground or a rock skids instead of
+            // braking hard (the tyres do the gripping) and bottoming out doesn't stop it dead. Not none:
+            // a wreck on its roof should scrape to a stop, not slide like on ice.
             if (tuning.slipperyBody)
             {
                 if (slipperyBody == null)
                     slipperyBody = new PhysicsMaterial("Vehicle body")
                     {
-                        dynamicFriction = 0f,
-                        staticFriction = 0f,
+                        dynamicFriction = 0.3f,
+                        staticFriction = 0.3f,
                         bounciness = 0f,
                         frictionCombine = PhysicsMaterialCombine.Minimum,
                         bounceCombine = PhysicsMaterialCombine.Minimum,

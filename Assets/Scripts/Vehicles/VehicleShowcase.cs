@@ -18,7 +18,7 @@ namespace ShooterMashup.Vehicles
         public Vector3 buggyPosition = new Vector3(64f, 0f, 14f);
         public float buggyYaw;
 
-        public enum Design { Buggy, Truck, RallyTruck, CrashTruck }
+        public enum Design { Buggy, Truck, RallyTruck, StuntTruck }
         [Tooltip("Which vehicle to build.")]
         public Design design = Design.Buggy;
         [Tooltip("Drive it in circles while nobody sits in it (to practise riding on it).")]
@@ -31,8 +31,16 @@ namespace ShooterMashup.Vehicles
         public float autopilotStopSeconds = 6f;
         [Tooltip("With the autopilot: only drive while a player is standing on it.")]
         public bool autopilotWaitForRider;
-        [Tooltip("Instead of the autopilot: a crash test, driving straight ahead at this speed (m/s) once someone stands on it. 0: off.")]
-        public float crashTestSpeed;
+        [Tooltip("Instead of the autopilot: a stunt (crash, flip, loop), driven at this speed (m/s) once someone stands on it. 0: off.")]
+        public float stuntSpeed;
+        [Tooltip("With a stunt: world points to follow (empty: straight ahead).")]
+        public Vector3[] stuntPath = new Vector3[0];
+        [Tooltip("With a stunt: the run ends after this many metres (0: when it crashes or gets stuck).")]
+        public float stuntRunLength;
+        [Tooltip("With a stunt: keep the self-levelling assists (off lets it roll over).")]
+        public bool stuntUprightAssists = true;
+        [Tooltip("With a stunt: spring sag at rest as a fraction of travel (0: normal). Lower is stiffer.")]
+        public float stuntRideHeight;
 
         public struct Placement
         {
@@ -49,11 +57,18 @@ namespace ShooterMashup.Vehicles
                 return;
             List<Placement> plan = design == Design.Truck ? TruckPlan()
                 : design == Design.RallyTruck ? TruckPlan("Big wheel")
-                : design == Design.CrashTruck ? TruckPlan("Big wheel", cab: false)
+                : design == Design.StuntTruck ? TruckPlan("Big wheel", cab: false)
                 : BuggyPlan();
             Vehicle v = Build(structures, buggyPosition, buggyYaw, plan);
-            if (v != null && crashTestSpeed > 0f)
-                v.gameObject.AddComponent<CrashTestDriver>().speed = crashTestSpeed;
+            if (v != null && stuntSpeed > 0f)
+            {
+                var stunt = v.gameObject.AddComponent<StuntDriver>();
+                stunt.speed = stuntSpeed;
+                stunt.path = stuntPath;
+                stunt.runLength = stuntRunLength;
+                stunt.uprightAssists = stuntUprightAssists;
+                stunt.rideHeight = stuntRideHeight;
+            }
             else if (v != null && autopilot)
             {
                 var pilot = v.gameObject.AddComponent<VehicleAutopilot>();
@@ -68,7 +83,7 @@ namespace ShooterMashup.Vehicles
         /// A flatbed truck: two 3x3 floors on axle beams (6 m long, 3 m wide), a seat at the front
         /// behind a cab wall of 1x1 walls, low rails and a tailgate round the bed, and a wheel on
         /// each end of each axle (flush on the beam ends). Without the cab (no seat either: it
-        /// drives towards +z), the bed is open at the front, for the crash test.
+        /// drives towards +z), the bed is open at the front, for the stunt tests.
         /// </summary>
         public static List<Placement> TruckPlan(string wheel = "Wheel", bool cab = true)
         {

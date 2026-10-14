@@ -112,6 +112,8 @@ namespace ShooterMashup.EditorTools
             area = Area("Off-road", OffRoadArea);
             BuildOffRoad();
             BuildCrashTest(new Vector3(-100f, 0f, 112f));
+            BuildFlipTest(new Vector3(40f, 0f, 125f));
+            BuildLoopTest(new Vector3(40f, 0f, 150f));
 
             area = Area("Hub", Vector3.zero);
             BuildHub();
@@ -555,9 +557,9 @@ namespace ShooterMashup.EditorTools
             track.Straight(110f);
             track.Straight(15f);
             Transform jump = track.Section("Jump");
-            float z = Slope(jump, "Jump ramp", 0f, 4f, 0.8f, 10f, 0.3f, matTarget);
-            Box("Jump table", new Vector3(0f, 0.4f, z + 12.5f), new Vector3(10f, 0.8f, 25f), matTrim, jump);
-            Slope(jump, "Landing ramp", z + 25f, -4f, 0.8f, 10f, 0.3f, matWall);
+            float z = Slope(jump, "Jump ramp", 0f, 4f, 0.8f, width, 0.3f, matTarget);   // full width: no edge to catch
+            Box("Jump table", new Vector3(0f, 0.4f, z + 12.5f), new Vector3(width, 0.8f, 25f), matTrim, jump);
+            Slope(jump, "Landing ramp", z + 25f, -4f, 0.8f, width, 0.3f, matWall);
             Label("jump", new Vector3(0f, 3f, 0f), jump, 0f);
             track.Straight(135f);
 
@@ -616,8 +618,113 @@ namespace ShooterMashup.EditorTools
             Label("crash block", new Vector3(run + 1.5f, 2.5f, 0f), parent, -90f);
 
             var truck = new GameObject("Crash truck").AddComponent<VehicleShowcase>();
-            truck.design = VehicleShowcase.Design.CrashTruck;
-            truck.crashTestSpeed = 25f;
+            truck.design = VehicleShowcase.Design.StuntTruck;
+            truck.stuntSpeed = 25f;
+            truck.buggyPosition = parent.TransformPoint(Vector3.zero);
+            truck.buggyYaw = 90f;
+        }
+
+        /// <summary>
+        /// A flip test beside the crash test, heading +x: stand on the stunt truck and it drives
+        /// 90 km/h at a steep kicker under its right wheels only, which throws it onto its roof
+        /// (its self-levelling assists are off: they would catch it).
+        /// Shows what happens to a rider when a vehicle goes over. The truck is put back once
+        /// you're off it.
+        /// </summary>
+        static void BuildFlipTest(Vector3 start)
+        {
+            var parent = Group("Flip test");
+            parent.localPosition = start;
+            const float run = 80f;
+            Box("Flip lane", new Vector3(run / 2f + 20f, 0.005f, 0f), new Vector3(run + 48f, 0.01f, 4f), matSlick, parent);
+            // The kicker: a ramp along +x under the right-hand wheels (the truck faces +x, so its right is -z).
+            var kicker = new GameObject("Kicker").transform;
+            kicker.SetParent(parent, false);
+            kicker.SetLocalPositionAndRotation(new Vector3(run, 0f, -1.8f), Quaternion.Euler(0f, 90f, 0f));
+            Slope(kicker, "Kicker ramp", 0f, 35f, 2.5f, 1.6f, 0.3f, matTarget);
+            Label("flip test: stand on the truck, it hits a kicker\nunder one side at 90 km/h (no self-levelling)",new Vector3(-2f, 4f, 4f), parent, 180f);
+            Label("kicker", new Vector3(run, 2.5f, -1.8f), parent, -90f);
+
+            var truck = new GameObject("Flip truck").AddComponent<VehicleShowcase>();
+            truck.design = VehicleShowcase.Design.StuntTruck;
+            truck.stuntSpeed = 25f;
+            truck.stuntRunLength = run + 40f;
+            truck.stuntUprightAssists = false;   // they would catch it: the point is to see it roll
+            truck.buggyPosition = parent.TransformPoint(Vector3.zero);
+            truck.buggyYaw = 90f;
+        }
+
+        /// <summary>
+        /// A loop test, heading +x: stand on the stunt truck and it drives 108 km/h through a
+        /// 26 m tall loop and out the other side. Like real loops it's a teardrop, a 20 m radius at
+        /// the bottom tightening to 6 m at the top, and the bend eases in and out, so the bottom
+        /// isn't one sudden jolt (it still pulls about 4 g: the stunt truck has stiff springs). A
+        /// flat loop would block its own way in, so it shifts 7 m to the left as it goes round and
+        /// the exit lane runs beside the entry lane. The truck steers along the loop's centre line,
+        /// in its own frame, so it keeps steering upside down.
+        /// </summary>
+        static void BuildLoopTest(Vector3 start)
+        {
+            var parent = Group("Loop test");
+            parent.localPosition = start;
+            const float approach = 90f, bottomRadius = 20f, topRadius = 6f, ease = 25f * Mathf.Deg2Rad;
+            const float shift = 7f, width = 5f, thick = 0.4f, exit = 70f;
+
+            // Lay the running surface out by bending a line: its heading turns from 0 to a full
+            // circle, the bend's radius depending on the heading (wide at the bottom, tight at the
+            // top) and easing in from straight over the first and last `ease` of the turn.
+            var surface = new List<Vector3> { new Vector3(approach, 0f, 0f) };
+            {
+                const float ds = 0.05f, every = 1f;
+                float heading = 0f, sinceLast = 0f;
+                Vector2 p = Vector2.zero;
+                while (heading < 2f * Mathf.PI)
+                {
+                    float radius = topRadius + (bottomRadius - topRadius) * (1f + Mathf.Cos(heading)) / 2f;
+                    float easing = Mathf.Clamp(Mathf.Min(heading, 2f * Mathf.PI - heading) / ease, 0.05f, 1f);
+                    heading = Mathf.Min(heading + ds * easing / radius, 2f * Mathf.PI);
+                    p += new Vector2(Mathf.Cos(heading), Mathf.Sin(heading)) * ds;
+                    sinceLast += ds;
+                    if (sinceLast >= every || heading >= 2f * Mathf.PI)
+                    {
+                        surface.Add(new Vector3(approach + p.x, p.y, shift * heading / (2f * Mathf.PI)));
+                        sinceLast = 0f;
+                    }
+                }
+            }
+            Vector3 loopEnd = surface[surface.Count - 1];
+            loopEnd.y = 0f;
+            surface[surface.Count - 1] = loopEnd;
+
+            Box("Loop entry lane", new Vector3(approach / 2f - 4f, 0.005f, 0f), new Vector3(approach + 8f, 0.01f, width), matSlick, parent);
+            Box("Loop exit lane", new Vector3(loopEnd.x + exit / 2f, 0.005f, shift), new Vector3(exit, 0.01f, width), matSlick, parent);
+            for (int i = 0; i + 1 < surface.Count; i++)
+            {
+                Vector3 p0 = surface[i], p1 = surface[i + 1], along = p1 - p0;
+                // The surface's inside faces the loop's middle: its normal is the heading turned
+                // a quarter turn up (left in the vertical plane).
+                Vector3 inward = Vector3.Cross(new Vector3(0f, 0f, 1f), new Vector3(along.x, along.y, 0f)).normalized;
+                Box($"Loop {i}", (p0 + p1) / 2f - inward * (thick / 2f), new Vector3(width, thick, along.magnitude + 0.15f),
+                    i % 2 == 0 ? matTarget : matTrim, parent, Quaternion.LookRotation(along, inward));
+            }
+            Label("loop test: stand on the truck,\nit drives 108 km/h through the loop", new Vector3(-2f, 4f, 4f), parent, 180f);
+
+            // The line to steer along: the approach, round the loop, and out along the exit lane.
+            var line = new List<Vector3>();
+            for (float x = 0f; x < approach; x += 4f)
+                line.Add(parent.TransformPoint(new Vector3(x, 0f, 0f)));
+            foreach (Vector3 p in surface)
+                line.Add(parent.TransformPoint(p));
+            for (float x = 4f; x <= exit; x += 4f)
+                line.Add(parent.TransformPoint(loopEnd + new Vector3(x, 0f, 0f)));
+
+            float loopLength = surface.Count - 1f;   // samples are about a metre apart
+            var truck = new GameObject("Loop truck").AddComponent<VehicleShowcase>();
+            truck.design = VehicleShowcase.Design.StuntTruck;
+            truck.stuntSpeed = 30f;
+            truck.stuntRideHeight = 0.2f;   // stiff springs, or it bottoms out at the bottom of the loop
+            truck.stuntPath = line.ToArray();
+            truck.stuntRunLength = approach + loopLength + exit - 20f;
             truck.buggyPosition = parent.TransformPoint(Vector3.zero);
             truck.buggyYaw = 90f;
         }
