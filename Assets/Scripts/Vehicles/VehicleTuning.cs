@@ -4,9 +4,10 @@ using UnityEngine;
 namespace ShooterMashup.Vehicles
 {
     /// <summary>
-    /// How vehicles drive. One set for every vehicle for now; engines, tyres and the like will
-    /// change these per vehicle later. The assists are what make anything a player builds drive
-    /// decently, Trailmakers style, without them having to think about suspension geometry.
+    /// How vehicles drive, for every vehicle; what differs per vehicle comes from its parts:
+    /// engines (power, pull, top speed), wheels (size, travel, driven or free, tyre grip) and the
+    /// mass of its pieces. The assists are what make anything a player builds drive decently,
+    /// Trailmakers style, without them having to think about suspension geometry.
     /// </summary>
     [Serializable]
     public class VehicleTuning
@@ -17,31 +18,39 @@ namespace ShooterMashup.Vehicles
         [Tooltip("Suspension damping as a fraction of critical damping.")]
         [Range(0f, 2f)] public float damping = 0.5f;
 
-        [Header("Driving")]
-        [Tooltip("Acceleration (m/s²) with standard wheels, whatever the vehicle weighs, until engines exist. Each wheel's power scales it; top speed comes from the wheels.")]
+        [Header("Driving (power comes from the engines)")]
+        [Tooltip("Without an engine: acceleration (m/s²) up to 12 m/s, whatever it weighs, and a top speed of 26 m/s.")]
         public float acceleration = 7f;
         [Tooltip("Top speed in reverse (m/s).")]
         public float reverseSpeed = 8f;
-        [Tooltip("Braking deceleration (m/s²).")]
+        [Tooltip("Braking deceleration (m/s²), as far as the tyres allow.")]
         public float braking = 14f;
-        [Tooltip("Coasting slows down by this fraction of the speed per second.")]
-        public float rollingResistance = 0.3f;
+        [Tooltip("Driven wheels off the throttle slow down by this fraction of the speed per second (engine braking).")]
+        public float engineBraking = 0.06f;
+        [Tooltip("Rolling resistance: a fraction of each tyre's load.")]
+        public float rollingResistance = 0.012f;
         [Tooltip("Below this speed (m/s) with no throttle, the vehicle holds itself still.")]
         public float holdSpeed = 1.5f;
 
-        [Header("Grip and steering")]
-        [Tooltip("Tyre friction coefficient: grip force per unit of load.")]
-        public float grip = 1.2f;
+        [Header("Tyres and steering")]
+        [Tooltip("Tyre friction coefficient: grip force per unit of load (times each tyre's own grip). With the extra gravity 0.75 is about 1 g of cornering.")]
+        public float grip = 0.75f;
+        [Tooltip("A sliding tyre (asked for more than its grip) grips this fraction as well until the slide dies down: what lets cars spin and drift.")]
+        [Range(0.3f, 1f)] public float slideGrip = 0.75f;
+        [Tooltip("How fast (m/s) a sliding wheel spins over the ground per times its grip it is driven with. More: a wheel sliding under power loses more sideways grip (power oversteer).")]
+        public float wheelspinSlip = 2f;
+        [Tooltip("Traction control: a driven wheel is pushed at most this fraction past its grip (0: never spins, -1: off). More: more wheelspin, so powerful cars step out.")]
+        public float tractionSlack = 0f;
+        [Tooltip("Below this speed over the ground (m/s) a tyre never slides, so parking and crawling stay sure-footed.")]
+        public float slideMinSpeed = 2f;
         [Tooltip("Fraction of a wheel's sideways sliding cancelled per physics step (0..1).")]
         [Range(0f, 1f)] public float lateralStiffness = 0.5f;
         [Tooltip("Steering angle of the frontmost wheels at low speed (degrees).")]
         public float maxSteer = 32f;
-        [Tooltip("Steering angle at top speed (degrees).")]
-        public float steerAtTopSpeed = 9f;
+        [Tooltip("Steering assist: at speed, full lock turns as tightly as the tyres allow times this (more: more understeer, and oversteer with power).")]
+        public float steerGripMargin = 1f;
         [Tooltip("How fast the steering follows the keys (per second).")]
         public float steerRate = 5f;
-        [Tooltip("Rear wheel grip with the handbrake on, as a fraction of normal.")]
-        [Range(0f, 1f)] public float handbrakeGrip = 0.35f;
         [Tooltip("Grip on slick surfaces (ice, marked SurfaceFlags.Slick), as a fraction of normal.")]
         [Range(0f, 1f)] public float slickGrip = 0.15f;
 
@@ -56,19 +65,27 @@ namespace ShooterMashup.Vehicles
         public float uprightDamping = 2.5f;
         [Tooltip("How hard the body turns upright in the air (1/s²), so jumps land on the wheels.")]
         public float airUpright = 1.5f;
-        [Tooltip("Pushes the vehicle down at speed (m/s² per (m/s)²).")]
-        public float downforce = 0.01f;
+        [Tooltip("Pushes the vehicle down at speed (m/s² per (m/s)²). It adds grip, so keep it small.")]
+        public float downforce = 0.004f;
         [Tooltip("Downforce never pushes harder than this (m/s²), or fast vehicles squash their springs flat.")]
-        public float maxDownforce = 6f;
+        public float maxDownforce = 4f;
         [Tooltip("Extra gravity on vehicles (m/s²), so they feel less floaty.")]
         public float extraGravity = 4f;
+        [Tooltip("Air drag coefficient (times frontal area and speed squared). Boxy builds are about 0.6.")]
+        public float dragCoefficient = 0.6f;
         [Tooltip("The body has little friction (0.3), so scraping the ground or a rock skids instead of braking hard (the tyres grip).")]
         public bool slipperyBody = true;
 
+        [Header("Trailers")]
+        [Tooltip("A trailer's kingpin couples to a fifth wheel within this distance (m).")]
+        public float couplingReach = 0.4f;
+
         [Header("Mass")]
-        [Tooltip("Densities (kg/m³) of wood, stone and iron; a piece's mass is its volume times this.")]
+        [Tooltip("Densities (kg/m³) of wood, stone, iron and scrap; a piece's mass is its volume times this " +
+                 "(engines and wheels have their own). Scrap is sheet metal on a frame, not solid: light.")]
         public float woodDensity = 500f;
         public float stoneDensity = 2400f;
         public float ironDensity = 7800f;
+        public float scrapDensity = 200f;
     }
 }

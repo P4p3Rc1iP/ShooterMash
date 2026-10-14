@@ -67,8 +67,8 @@ Agreed with the owner:
   world space, also when snapping; Shift+RMB copies the aimed piece (shape, material,
   rotation). Placeholder texture and colour per material. Sizes may change once they've been
   tried in first person.
-- Valheim's support model per material (wood, stone, iron for now; Gorkamorka materials like
-  scrap and plastic later). Integrity is solved exactly and in real time. A piece resting on
+- Valheim's support model per material (wood, stone, iron and scrap; plastic and the like may
+  follow). Integrity is solved exactly and in real time. A piece resting on
   another (flat contact) counts as vertical support even when offset, e.g. staggered slabs.
   Losses are per metre (per 2.5 m, so 2.5 m pieces match Valheim's per-piece numbers), so small
   pieces reach as far as big ones (owner's choice). Stone's horizontal loss is 4 per 2.5 m so it
@@ -78,7 +78,9 @@ Agreed with the owner:
   pillars, beams and diagonal beams (45° and 27°, rising 1 or 3 m, snapping at both ends of
   their centre line like roofs; beams snap by their centre line; horizontal beams are 0.25 m,
   pillars 0.23 m and diagonals 0.21 m, all a bit more than the 0.2 m walls and each a touch
-  thinner than the last so faces never coincide and z-fight). Wood also has see-through
+  thinner than the last so faces never coincide and z-fight). Scrap (Gorkamorka sheet metal,
+  added 2026-10-14 for vehicle bodies) has floors, walls, pillars and beams; it's a bit stronger
+  than wood (support 300) and light on vehicles (200 kg/m³). The showcase has a scrap shack. Wood also has see-through
   1 m wide ladders (1 and 3 m tall; climbable through
   `SurfaceFlags.Ladder`, which the piece view adds as a `PmSurface`). Roofs snap by their centre
   plane, so roofs, diagonals and beams snapped to one point cross there (the owner's choice
@@ -115,14 +117,13 @@ Agreed with the owner:
   frozen on the lift), raise/lower it, put any vehicle back on it upright (recovery after a
   flip), take it away to drive. Vehicles can only be built on while on a lift.
 - **Trailmakers-style driving:** no player-made joints or springs. A vehicle is one rigid body;
-  the wheel piece is raycast suspension done in code, springs sized to the vehicle's weight,
-  all wheels drive, the front half steer, forward is where the seat faces. Assists (low centre
-  of mass, grip forces raised towards it, self-levelling, upright in the air, downforce, extra
-  gravity, parking hold) make anything drive. All numbers in `VehicleTuning`.
+  the wheel piece is raycast suspension done in code, springs sized to the weight each wheel
+  carries, the front half steer, forward is where the seat faces. Assists make anything drive
+  (see the Vehicles README). All numbers in `VehicleTuning`.
 - Vehicles use the normal building pieces (a shed on a truck) plus vehicle-only parts (wheel,
   driver seat; the world refuses them). Integrity on vehicles: connected is enough (zero
-  support loss, one anchor piece counts as grounded). One wheel size for now; car-scale pieces
-  (a 0.5 m grid) may come later.
+  support loss, one anchor piece counts as grounded). Car-scale pieces (a 0.5 m grid) may come
+  later; vehicles are 3 m wide for now.
 - F sits in a seat / gets out; W/S/A/D/Space drive; V cycles follow camera (default), first
   person and free orbit.
 - **Multiplayer plan:** driver authority (the driver's machine simulates the vehicle, others see
@@ -151,10 +152,20 @@ Agreed with the owner:
   Loop: let go just past vertical and fly up inside the loop (a real rider is pressed onto the
   deck). The camera only follows yaw, never pitch or roll. Staying on through a loop would need
   the player simulated in the vehicle's frame (felt gravity, rolling camera): not decided.
-- Vehicle assists added for speed: the body has little friction (0.3, `slipperyBody`; scrapes skid instead
-  of braking hard; none made wrecks slide on their roofs like ice) and downforce is capped at 6 m/s² (`maxDownforce`; uncapped 0.01 v² squashed
-  the springs flat at 150 km/h, so the chassis hit every bump). Wheel pieces carry their own
-  travel, top speed and power: Wheel 0.5 m (26 m/s), Big wheel 0.75 m (56 m/s, power 2).
+- **Driving model (2026-10-14; the owner found it too sticky, with no spinning out):** engines
+  (4-cyl 130 kW, V6 200, V8 320, diesel 420 with huge pull; they add up) drive only the driven
+  wheels; each wheel piece is driven or free in four sizes (0.8, 1, 1.5, 2 m), so RWD, FWD and 4x4
+  differ. Tyres grip 0.75 x load (about 1 g; it was 1.7 g with the extra gravity), and a tyre
+  asked for more slides and grips 75% until the slide dies down, its force along the slip (a
+  wheel spinning under power loses its sideways grip: power oversteer). Assists: steering lock
+  at speed asks for about the grip limit and grows by the slip angle (countersteer); traction
+  control keeps the engine alone from spinning a wheel (`tractionSlack`); springs sized per
+  wheel from the weight distribution (also a trailer's on its tractor). Air drag by frontal
+  area, rolling resistance by load. Trailers: fifth wheel + kingpin parts, a joint, brakes with
+  the tractor. Earlier: low-friction body (0.3, `slipperyBody`) and downforce capped (now 4 m/s²).
+  Six demo designs in a lineup by the rally track (buggy RWD, saloon FWD, van RWD, rally truck
+  AWD, heavy 8x8 with 15 t of iron, semi 6x4 with a stone-laden trailer); owner's brief: Mad Max
+  off-road/rally, arcade not sim, "too powerful to control" beats "not powerful enough".
 
 ## To-do / open questions
 
@@ -235,7 +246,8 @@ Agreed with the owner:
   carousel), **building** (x -190: the showcase, diggable dirt, bridge cliffs; the StructureManager stays at the world origin and the
   showcase gets world corners), and **off-road** (z -200, behind the spawn: a 1160 m loop with two
   400 m bumpy straights; a rally truck on big wheels drives it only while someone
-  stands on it, ~150 km/h on the north straight; and
+  stands on it, ~150 km/h on the north straight; a lineup of six drivable demo vehicles west of
+  the arrival, facing the track; and
   stunt tests by the arrival, each a cab-less flatbed on big wheels that runs once you stand on it
   and resets itself (`StuntDriver`): a crash into a concrete block narrower than its wheel track
   (90 km/h, throws you over it), a flip off a kicker under one side (90 km/h, self-levelling off)

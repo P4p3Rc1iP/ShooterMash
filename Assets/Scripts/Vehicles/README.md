@@ -1,22 +1,35 @@
 # Vehicles (contraptions)
 
 First prototype of building and driving vehicles. The lift is copied from Scrap Mechanic; the
-driving model takes after Trailmakers, where whatever you build drives decently.
+driving model takes after Trailmakers, where whatever you build drives decently, but with
+engines, driven and free wheels and tyres that let go, so cars can drift and spin.
 
 ## Try it
 
 Rebuild the test map and press Play. A buggy stands to the right of the spawn hub, facing
 an ice sheet (tyres keep only 15% of their grip on it: try turning). Walk through the portal behind the spawn
-(or drive the road south) to the **off-road area**: a 1160 m rally loop with rollers, washboard,
-rocks and a table-top jump, where a rally truck on big wheels drives up to ~150 km/h while you
-stand on it, and stunt tests (a crash, a flip and a loop) by the arrival.
+(or drive the road south) to the **off-road area**. West of where you arrive is a **lineup** of
+six vehicles facing the rally track, each with a sign:
+
+| Vehicle | Drive | Engine | Mass | Feel |
+| --- | --- | --- | --- | --- |
+| Buggy | rear | V6, 200 kW | 0.6 t | fast and loose: the back steps out under power, drifts |
+| Saloon | front | V6, 200 kW | 1.6 t | quick, understeers, hard to unsettle |
+| Van | rear | V8, 320 kW | 3.7 t | heavy, stable unless provoked |
+| Rally truck | all | 2 x V8, 640 kW | 1.9 t | absurdly fast (0-100 in 3 s), four-wheel drifts |
+| Heavy truck | 8x8 | diesel, 420 kW | 20 t (15 t of iron) | lumbering: 0-90 km/h in about 25 s |
+| Semi | 6x4 | diesel, 420 kW | 19 t with its trailer (13 t of stone) | lumbering, the trailer swings behind |
+
+The off-road area also has a 1160 m rally loop with rollers, washboard, rocks and a table-top
+jump, where a rally truck drives up to ~150 km/h while you stand on it, and stunt tests (a crash,
+a flip and a loop) by the arrival.
 
 | Input | Action |
 | --- | --- |
 | F | sit in the seat you aim at / get out |
 | W / S | throttle / brake, then reverse |
 | A / D | steer |
-| Space | handbrake (the rear slides) |
+| Space | handbrake (locks the rear wheels: they slide) |
 | V | camera: follow (default) → first person → free orbit (scroll zooms) |
 | L | lift tool |
 
@@ -32,21 +45,33 @@ With the lift tool (L):
 
 Build on a lift with the build tool (B). The first piece on an empty lift starts a vehicle. A
 vehicle can only be built on while it's on a lift. Every building piece works (a shed on a
-truck), plus two vehicle parts: the **wheel** (1 m, with suspension; snap it to a beam's side or
-the end of an axle beam; turn it 180° for the other side) and the **driver seat** (it faces the
-way the vehicle drives; it sits on top of a beam).
+truck); **scrap** is the light material for bodies (sheet metal on a frame, 200 kg/m³). Vehicle
+parts (in every material tab; their mass is their own):
+
+- **Wheels** in four sizes: small (0.8 m, road), standard (1 m), big (1.5 m, off-road) and huge
+  (2 m, trucks), each **driven** (the engines turn it) or **free** (it only rolls). Snap one to
+  a beam's side or the end of an axle beam; turn it 180° for the other side. Driven rear wheels
+  and free fronts make a rear-wheel-drive car, and so on.
+- **Engines:** 4-cyl (130 kW), V6 (200 kW), V8 (320 kW) and diesel (420 kW, huge pull, 108 km/h
+  top). Engines add up. Without one a vehicle still drives, as before engines existed.
+- **Driver seat:** it faces the way the vehicle drives; it sits on top of a beam or a floor.
+- **Fifth wheel and kingpin:** a fifth wheel on a tractor's deck, a kingpin under a trailer's
+  front. Back the tractor under the trailer and they couple when they come within 0.4 m.
 
 ## Layout
 
 ```
 Vehicle.cs            the vehicle: a BuildHost with its own BuildSystem in its local space, one
-                      Rigidbody, mass from the pieces, raycast wheels and the driving assists
+                      Rigidbody, mass from the pieces, engines, raycast wheels, tyres, assists, trailers
 VehicleBuildWorld.cs  "ground" for a vehicle's pieces: connected to the anchor piece is enough
 VehicleTuning.cs      every driving number, with tooltips
 Lift.cs               the lift: a platform; holds one vehicle frozen; builds new vehicles
 LiftTool.cs           the player's lift tool (L)
 VehicleDriver.cs      sitting, driving controls and the three cameras
-VehicleShowcase.cs    builds the demo buggy on a lift and drops it
+VehicleShowcase.cs    the demo designs, built on a lift and dropped (the semi's trailer is coupled)
+VehicleAutopilot.cs   drives a vehicle round a path (the rally truck), optionally only with a rider
+StuntDriver.cs        drives a stunt once someone stands on it, then resets (crash, flip, loop)
+Riders.cs             is a player riding a vehicle?
 ```
 
 ## How it works
@@ -60,19 +85,36 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
   counts as grounded: anything connected to it holds, anything cut off falls off (vanishes,
   like collapsed building pieces). The first piece must rest on the lift.
 - **Mass** is each piece's volume times its material's density (wood 500, stone 2400, iron
-  7800 kg/m³), plus 40 kg per wheel. Inertia comes from the pieces' boxes.
-- **Wheels** are raycast suspension, no joints: a spring and damper sized to the vehicle's
-  weight (every wheel carries its share, sitting 45% into its travel), grip in a friction
-  circle, all wheels driven, the front half of the wheels steering (the frontmost most).
-  Forward is where the seat faces.
+  7800, scrap 200 kg/m³); wheels and engines have their own. Inertia comes from the pieces' boxes.
+- **Engines** drive the driven wheels on the ground, shared equally: with up to their pull at
+  low speed (low gears), above that with their power (force = power / speed), up to their top
+  speed, where a limiter cuts in. Air drag comes from the frontal area, so light fast cars are
+  held back at speed and heavy trucks hardly at all; tyres have rolling resistance.
+- **Wheels** are raycast suspension, no joints: a spring and damper per wheel, sized to the
+  weight that wheel carries (sitting 45% into its travel), the front half of the wheels steering
+  (the frontmost most). Forward is where the seat faces.
+- **Tyres.** Each tyre works out the force that would stop it sliding sideways, plus the drive
+  or brake asked of it, and gets as much as its grip allows: grip (0.75) times its load, about
+  1 g of cornering. Asked for more, it slides, and a sliding tyre grips less (75%) until the
+  slide dies down; its force then points along the slip, so a wheel spinning under power has
+  little sideways grip left. That's what makes the back of a rear-wheel-drive car step out
+  under power, a front-wheel-drive one push wide, and a handbrake turn spin.
 - **Surfaces:** wheels on a surface marked `SurfaceFlags.Slick` (the players' slick flag, via
   `PmSurface`) keep only `slickGrip` (15%) of their grip: ice.
-- **Assists** (what makes anything drive): the centre of mass is held low, grip forces act
-  partway up towards it (less body roll), the body levels itself to the ground and turns
-  upright in the air, a little downforce (capped at 6 m/s², or fast vehicles squash their
-  springs flat), extra gravity, a low-friction body (scraping the ground or a rock skids instead
-  of braking hard: only the tyres grip), and it holds still when parked.
-  Acceleration is the same for any weight until engines exist.
+- **Assists** (what makes anything drive):
+  - steering: at speed full lock asks for about what the tyres can give, and grows by the slip
+    angle while sliding, so you can always catch a slide (countersteer);
+  - traction control: a driven wheel is never pushed past its grip by the engine alone (set
+    `tractionSlack` above 0 for wheelspin, -1 to turn it off);
+  - springs sized per wheel from where the weight sits (also a trailer's weight on its tractor),
+    so a loaded truck sits level;
+  - the centre of mass is held low, grip forces act partway up towards it (less body roll), the
+    body levels itself to the ground and turns upright in the air, a little downforce (at most
+    4 m/s²), extra gravity, a low-friction body (scrapes skid instead of braking hard), and it
+    holds still when parked.
+- **Trailers.** A kingpin couples to a fifth wheel with a joint: free to turn, pitching over
+  crests, rolling a little. A coupled trailer brakes and parks with its tractor. Putting either
+  on a lift uncouples them; there's no key to uncouple yet.
 - **The lift** freezes the vehicle (kinematic body) and sets its pose; taking it away makes the
   body dynamic again. Putting a vehicle on it rests the vehicle's lowest point (usually the
   tyres at full droop) on the platform; adding parts that hang lower raises it.
@@ -89,7 +131,7 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
   off-road area). Flipping or looping drops you: past 45° of tilt you're no longer standing.
 - **Multiplayer:** planned as driver authority: the driver's machine runs the vehicle's physics
   and others see a smoothed copy. Rigid-body physics can't be predicted like player movement.
-- Two wheel sizes (Wheel, and Big wheel: taller travel, faster, twice the push), one seat, no
-  engines or fuel.
+- No gears, clutch, fuel or engine sound; no differential (the drive is shared equally).
 - No crash damage; pieces don't break off. Vehicles don't damage buildings.
+- No uncouple key for trailers, and no landing legs: an uncoupled trailer rests on its nose.
 - Vehicles only drive on colliders (fine for voxel terrain with colliders).

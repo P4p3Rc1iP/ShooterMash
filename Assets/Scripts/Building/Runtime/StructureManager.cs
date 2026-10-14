@@ -16,12 +16,13 @@ namespace ShooterMashup.Building
         [Tooltip("Layers pieces rest on and the build tool aims at.")]
         public LayerMask solidMask = Physics.DefaultRaycastLayers;
 
-        [Tooltip("Placeholder colours per material: wood, stone, iron.")]
+        [Tooltip("Placeholder colours per material: wood, stone, iron, scrap.")]
         public Color[] materialColors =
         {
             new Color(0.80f, 0.56f, 0.32f), // wood
             new Color(0.72f, 0.72f, 0.70f), // stone
             new Color(0.48f, 0.58f, 0.72f), // iron
+            new Color(0.66f, 0.40f, 0.24f), // scrap (rust)
         };
 
         [Tooltip("Colour of tyres.")]
@@ -37,7 +38,7 @@ namespace ShooterMashup.Building
 
         public Material MaterialFor(BuildMaterial m) => pieceMaterials[(int)m];
         public Texture TextureFor(BuildMaterial m) => textures[(int)m];
-        public Color ColorFor(BuildMaterial m) => materialColors[(int)m];
+        public Color ColorFor(BuildMaterial m) => (int)m < materialColors.Length ? materialColors[(int)m] : Color.grey;
 
         /// <summary>Colour the world's pieces by how well supported they are (Valheim's hammer view).</summary>
         public bool ShowSupport

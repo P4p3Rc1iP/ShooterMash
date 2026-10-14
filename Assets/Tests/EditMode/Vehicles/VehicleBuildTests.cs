@@ -44,7 +44,7 @@ namespace ShooterMashup.Vehicles.Tests
         public void VehicleParts_AreRefusedInTheWorld()
         {
             var worldSys = new BuildSystem(new BuildConfig(), new VehicleBuildWorld((b, t) => true, b => b, null));
-            foreach (string name in new[] { "Wheel", "Driver seat" })
+            foreach (string name in new[] { "Wheel", "Wheel (free)", "Driver seat", "Engine V8", "Fifth wheel", "Kingpin" })
             {
                 Assert.IsTrue(PieceCatalog.All[Type(name)].VehicleOnly, name);
                 Assert.AreEqual(BuildFailure.VehicleOnly,
@@ -101,6 +101,42 @@ namespace ShooterMashup.Vehicles.Tests
             }
             Assert.AreEqual(4, sys.Pieces.Values.Count(p => p.def.Wheel != null));
             Assert.AreEqual(1, sys.Pieces.Values.Count(p => p.def.Seat != null));
+        }
+
+        /// <summary>Build a plan on a fresh vehicle; every placement must succeed.</summary>
+        void BuildAll(System.Collections.Generic.List<VehicleShowcase.Placement> plan, string what)
+        {
+            SetUp();
+            foreach (VehicleShowcase.Placement p in plan)
+            {
+                BuildResult r = sys.Execute(BuildCmd.Place(VehicleShowcase.Owner, Type(p.name), p.material, p.position, Quaternion.Euler(0, p.yaw, 0), 100));
+                Assert.IsTrue(r.Ok, $"{what}: {p.material} {p.name} at {p.position}: {r.failure}");
+                if (world.Anchor == null)
+                    world.Anchor = sys.Get(r.added[0]).boxes;
+            }
+        }
+
+        [TestCase(VehicleShowcase.Design.Buggy, 4, 2, 1)]
+        [TestCase(VehicleShowcase.Design.Saloon, 4, 2, 1)]
+        [TestCase(VehicleShowcase.Design.Van, 4, 2, 1)]
+        [TestCase(VehicleShowcase.Design.RallyTruck, 4, 4, 2)]
+        [TestCase(VehicleShowcase.Design.StuntTruck, 4, 4, 1)]
+        [TestCase(VehicleShowcase.Design.HeavyTruck, 8, 8, 1)]
+        [TestCase(VehicleShowcase.Design.Semi, 6, 4, 1)]
+        public void DemoDesigns_Build(VehicleShowcase.Design design, int wheels, int driven, int engines)
+        {
+            BuildAll(VehicleShowcase.PlanFor(design), design.ToString());
+            Assert.AreEqual(wheels, sys.Pieces.Values.Count(p => p.def.Wheel != null), "wheels");
+            Assert.AreEqual(driven, sys.Pieces.Values.Count(p => p.def.Wheel != null && p.def.Wheel.driven), "driven wheels");
+            Assert.AreEqual(engines, sys.Pieces.Values.Count(p => p.def.Engine != null), "engines");
+        }
+
+        [Test]
+        public void SemiTrailer_Builds()
+        {
+            BuildAll(VehicleShowcase.TrailerPlan(), "trailer");
+            Assert.AreEqual(4, sys.Pieces.Values.Count(p => p.def.Wheel != null && !p.def.Wheel.driven));
+            Assert.AreEqual(1, sys.Pieces.Values.Count(p => p.def.Coupling != null && p.def.Coupling.kingpin));
         }
     }
 }

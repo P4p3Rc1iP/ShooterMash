@@ -4,7 +4,7 @@ namespace ShooterMashup.Building
 {
     /// <summary>
     /// Placeholder textures per material, generated at runtime: wood planks, stone bricks and
-    /// riveted iron plates. They're greyscale so the colour can come from the material (or from
+    /// riveted iron plates, and patched, corrugated scrap. They're greyscale so the colour can come from the material (or from
     /// the support view) while the pattern still tells materials apart. One tile is 1 m, like
     /// the dev grid, and they tile seamlessly.
     /// </summary>
@@ -23,6 +23,7 @@ namespace ShooterMashup.Building
                 {
                     BuildMaterial.Stone => Stone(x, y),
                     BuildMaterial.Iron => Iron(x, y),
+                    BuildMaterial.Scrap => Scrap(x, y),
                     _ => Wood(x, y),
                 };
                 byte c = (byte)(Mathf.Clamp01(v) * 255f);
@@ -88,6 +89,30 @@ namespace ShooterMashup.Building
             float brushed = Noise(x / 2f, y / 32f, Size / 2, Size / 32, 7);
             float tone = 0.7f + 0.08f * Hash(x / plate, y / plate, 31);
             return tone * (0.92f + 0.12f * brushed);
+        }
+
+        /// <summary>
+        /// Corrugated sheets (ridges every 6.25 cm) in half-metre patches, offset and
+        /// overlapping, with blotches of rust and a few bolts: Gorkamorka scrap.
+        /// </summary>
+        static float Scrap(int x, int y)
+        {
+            // Patches: a 2 x 2 grid of sheets per metre, every other row shifted, each its own tone.
+            const int sheet = Size / 2;
+            int row = y / sheet;
+            int sx = Mod(x + (row % 2) * (sheet / 3), Size);
+            int col = sx / sheet;
+            int px = sx % sheet, py = y % sheet;
+            if (px < 3 || py < 3) return 0.25f;                   // overlap seam
+            if (py < 6) return 0.82f;                             // the lip of the sheet above
+            float ridge = 0.5f + 0.5f * Mathf.Sin(sx * (2f * Mathf.PI / (Size / 16f)));
+            float tone = 0.55f + 0.3f * Hash(col, row, 41);
+            float rust = Noise(x / 16f, y / 16f, Size / 16, Size / 16, 43);
+            rust = Mathf.Clamp01((rust - 0.55f) * 4f);            // blotches
+            // Bolts along the seams.
+            int bx = Mod(px - 10, 32), by = py - 10;
+            if (by >= -2 && by <= 2 && bx <= 4 && px > 8 && px < sheet - 8) return 0.95f;
+            return tone * (0.78f + 0.22f * ridge) * (1f - 0.35f * rust);
         }
 
         static int Mod(int a, int m) => ((a % m) + m) % m;

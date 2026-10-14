@@ -24,8 +24,12 @@ namespace ShooterMashup.Building
         public WheelSpec Wheel { get; private set; }
         /// <summary>A seat you can drive from (vehicles only), or null.</summary>
         public SeatSpec Seat { get; private set; }
+        /// <summary>An engine (vehicles only), or null.</summary>
+        public EngineSpec Engine { get; private set; }
+        /// <summary>A trailer coupling half (vehicles only), or null.</summary>
+        public CouplingSpec Coupling { get; private set; }
         /// <summary>Only buildable on a vehicle: the world refuses it.</summary>
-        public bool VehicleOnly => Wheel != null || Seat != null;
+        public bool VehicleOnly => Wheel != null || Seat != null || Engine != null || Coupling != null;
 
         public PieceDef(string name, Obb[] boxes, Vector3[] snapPoints)
         {
@@ -45,6 +49,18 @@ namespace ShooterMashup.Building
         internal PieceDef WithSeat(SeatSpec seat)
         {
             Seat = seat;
+            return this;
+        }
+
+        internal PieceDef WithEngine(EngineSpec engine)
+        {
+            Engine = engine;
+            return this;
+        }
+
+        internal PieceDef WithCoupling(CouplingSpec coupling)
+        {
+            Coupling = coupling;
             return this;
         }
 
@@ -72,18 +88,55 @@ namespace ShooterMashup.Building
         public readonly float width;      // along the axle, which is the piece's x axis
         public readonly float mass;       // kg
         public readonly float travel;     // suspension travel, full droop to full bump (m)
-        public readonly float topSpeed;   // how fast it can drive the vehicle (m/s)
-        public readonly float power;      // drive force, relative to a standard wheel
+        public readonly bool driven;      // the engines turn it; a free wheel only rolls
+        public readonly float grip;       // tyre grip, relative to a standard tyre
 
-        public WheelSpec(Vector3 center, float radius, float width, float mass, float travel, float topSpeed, float power)
+        public WheelSpec(Vector3 center, float radius, float width, float mass, float travel, bool driven, float grip)
         {
             this.center = center;
             this.radius = radius;
             this.width = width;
             this.mass = mass;
             this.travel = travel;
+            this.driven = driven;
+            this.grip = grip;
+        }
+    }
+
+    /// <summary>
+    /// An engine. Engines on a vehicle add up and drive its driven wheels: at low speed with up to
+    /// `pull` (the most its gearing puts through the wheels), higher up with its power (force =
+    /// power / speed), up to its top speed, where a limiter cuts in.
+    /// </summary>
+    public sealed class EngineSpec
+    {
+        public readonly float power;      // W
+        public readonly float pull;       // N, the most force at the wheels (low gears)
+        public readonly float topSpeed;   // m/s
+        public readonly float mass;       // kg (the piece's own mass, whatever its material)
+
+        public EngineSpec(float powerKw, float pullKn, float topSpeed, float mass)
+        {
+            power = powerKw * 1000f;
+            pull = pullKn * 1000f;
             this.topSpeed = topSpeed;
-            this.power = power;
+            this.mass = mass;
+        }
+    }
+
+    /// <summary>
+    /// Half of a trailer coupling: a fifth wheel on the towing vehicle, or a kingpin under the
+    /// trailer's front. When a kingpin comes within reach of a fifth wheel they couple.
+    /// </summary>
+    public sealed class CouplingSpec
+    {
+        public readonly bool kingpin;     // true: on the trailer; false: the fifth wheel on the tractor
+        public readonly Vector3 point;    // where they join, in piece space
+
+        public CouplingSpec(bool kingpin, Vector3 point)
+        {
+            this.kingpin = kingpin;
+            this.point = point;
         }
     }
 
@@ -142,14 +195,15 @@ namespace ShooterMashup.Building
 
         static PieceDef[] Build()
         {
-            const BuildMaterial wood = BuildMaterial.Wood, stone = BuildMaterial.Stone, iron = BuildMaterial.Iron;
+            const BuildMaterial wood = BuildMaterial.Wood, stone = BuildMaterial.Stone, iron = BuildMaterial.Iron, scrap = BuildMaterial.Scrap;
             var all = new List<PieceDef>();
-            // Wood: everything. Stone: slabs, pillars and stairs. Iron: pillars and beams.
-            foreach (float s in Sizes) all.Add(Floor($"Floor {N(s)}x{N(s)}", s).In(wood));
+            // Wood: everything. Stone: slabs, pillars and stairs. Iron: pillars and beams. Scrap
+            // (sheet metal, light: vehicle bodies, shacks): floors, walls, pillars and beams.
+            foreach (float s in Sizes) all.Add(Floor($"Floor {N(s)}x{N(s)}", s).In(wood, scrap));
             foreach (float s in Sizes) all.Add(Cuboid($"Slab {N(s)}x{N(s)}", s, StoneSlab, s).In(stone));
-            foreach (float s in Sizes) all.Add(Wall($"Wall {N(s)}x{N(s)}", s, s).In(wood));
-            foreach (float s in Sizes) all.Add(Pillar($"Pillar {N(s)} m", s).In(wood, stone, iron));
-            foreach (float s in Sizes) all.Add(HorizontalBeam($"Beam {N(s)} m", s).In(wood, iron));
+            foreach (float s in Sizes) all.Add(Wall($"Wall {N(s)}x{N(s)}", s, s).In(wood, scrap));
+            foreach (float s in Sizes) all.Add(Pillar($"Pillar {N(s)} m", s).In(wood, stone, iron, scrap));
+            foreach (float s in Sizes) all.Add(HorizontalBeam($"Beam {N(s)} m", s).In(wood, iron, scrap));
             // Diagonal beams for bracing, named by how high they rise: 45° (rise over the same run)
             // and 27° (rise over twice the run, like the stairs).
             foreach (float s in Sizes) all.Add(DiagonalBeam($"Diagonal beam 45° {N(s)} m", s, s).In(wood, iron));
@@ -178,12 +232,29 @@ namespace ShooterMashup.Building
             foreach (float rise in Sizes)
             foreach (float width in Sizes)
                 all.Add(Stairs($"Stairs {N(rise)} m up, {N(width)} m wide", width, 2f * rise, rise).In(wood, stone));
-            // Vehicle parts, only buildable on vehicles.
-            // A 1 m wheel (35 cm of travel, up to 26 m/s, about 94 km/h) and a 1.5 m off-road wheel (60 cm
-            // of travel, up to 46 m/s, about 165 km/h, with 1.5 times the push).
-            all.Add(WheelPiece("Wheel", 0.5f, 0.4f, 40f, 0.35f, 26f, 1f).In(wood, iron));
-            all.Add(WheelPiece("Big wheel", 0.75f, 0.55f, 90f, 0.6f, 56f, 2f).In(wood, iron));
-            all.Add(DriverSeat("Driver seat").In(wood));
+            // Vehicle parts, only buildable on vehicles, in any material (their mass is their own).
+            // Wheels in four sizes, each driven (the engines turn it) or free (it only rolls), so a
+            // build can be rear-, front- or all-wheel drive: 0.8 m road wheels, 1 m wheels, 1.5 m
+            // off-road wheels and 2 m truck wheels, with more suspension travel as they grow.
+            foreach ((string name, float radius, float width, float mass, float travel, float grip) in new[]
+            {
+                ("Small wheel", 0.4f, 0.3f, 25f, 0.25f, 1.05f),
+                ("Wheel", 0.5f, 0.4f, 40f, 0.35f, 1f),
+                ("Big wheel", 0.75f, 0.55f, 90f, 0.6f, 1f),
+                ("Huge wheel", 1f, 0.7f, 180f, 0.6f, 1f),
+            })
+            {
+                all.Add(WheelPiece(name, radius, width, mass, travel, true, grip).In(wood, iron, scrap));
+                all.Add(WheelPiece($"{name} (free)", radius, width, mass, travel, false, grip).In(wood, iron, scrap));
+            }
+            // Engines (size across x up y along z; power kW, pull at the wheels kN, top speed m/s, mass kg).
+            all.Add(EnginePiece("Engine 4-cyl", new Vector3(0.7f, 0.5f, 0.6f), new EngineSpec(130f, 7f, 45f, 130f)).In(wood, iron, scrap));
+            all.Add(EnginePiece("Engine V6", new Vector3(0.8f, 0.55f, 0.8f), new EngineSpec(200f, 10f, 52f, 180f)).In(wood, iron, scrap));
+            all.Add(EnginePiece("Engine V8", new Vector3(0.8f, 0.6f, 1f), new EngineSpec(320f, 14f, 60f, 250f)).In(wood, iron, scrap));
+            all.Add(EnginePiece("Engine diesel", new Vector3(1f, 1f, 1.4f), new EngineSpec(420f, 75f, 30f, 900f)).In(wood, iron, scrap));
+            all.Add(DriverSeat("Driver seat").In(wood, iron, scrap));
+            all.Add(CouplingPiece("Fifth wheel", false).In(wood, iron, scrap));
+            all.Add(CouplingPiece("Kingpin", true).In(wood, iron, scrap));
             return all.ToArray();
         }
 
@@ -409,16 +480,35 @@ namespace ShooterMashup.Building
         /// centre line, so the mount sits against the side of a beam running along z; and half a
         /// beam further in, so it sits flush on the end of a beam running along x (an axle). The
         /// wheel is on the +x side; turn it 180° for the other side of a vehicle. (Vehicle parts
-        /// are off the 1 m grid.) Each wheel brings its own suspension travel, top speed and power,
-        /// so bigger wheels make a faster, rougher-country vehicle.
+        /// are off the 1 m grid.) Each wheel brings its own suspension travel and tyre grip, and
+        /// is driven by the vehicle's engines or free.
         /// </summary>
-        static PieceDef WheelPiece(string name, float radius, float width, float mass, float travel, float topSpeed, float power)
+        static PieceDef WheelPiece(string name, float radius, float width, float mass, float travel, bool driven, float grip)
         {
             const float mount = 0.2f, gap = 0.03f;
             float inner = Beam / 2f;
             var mountBox = new Obb(new Vector3(inner + mount / 2f, 0, 0), new Vector3(mount, mount, mount));
-            var wheel = new WheelSpec(new Vector3(inner + mount + gap + width / 2f, 0, 0), radius, width, mass, travel, topSpeed, power);
+            var wheel = new WheelSpec(new Vector3(inner + mount + gap + width / 2f, 0, 0), radius, width, mass, travel, driven, grip);
             return new PieceDef(name, new[] { mountBox }, new[] { Vector3.zero, new Vector3(inner, 0, 0) }).WithWheel(wheel);
+        }
+
+        /// <summary>An engine block `size` big, snapping by the middle of its bottom (it sits on a floor).</summary>
+        static PieceDef EnginePiece(string name, Vector3 size, EngineSpec engine) =>
+            new PieceDef(name, new[] { new Obb(new Vector3(0, size.y / 2f, 0), size) }, new[] { Vector3.zero }).WithEngine(engine);
+
+        /// <summary>
+        /// A coupling plate, 1.2 m square and 0.15 m thick. A fifth wheel sits on top of a deck
+        /// (it snaps by the middle of its bottom) and couples at the middle of its top; a kingpin
+        /// hangs under a trailer's deck (it snaps by the middle of its top) and couples at the
+        /// middle of its bottom.
+        /// </summary>
+        static PieceDef CouplingPiece(string name, bool kingpin)
+        {
+            const float size = 1.2f, thick = 0.15f;
+            float bottom = kingpin ? -thick : 0f;
+            var plate = new Obb(new Vector3(0, bottom + thick / 2f, 0), new Vector3(size, thick, size));
+            Vector3 point = new Vector3(0, kingpin ? -thick : thick, 0);
+            return new PieceDef(name, new[] { plate }, new[] { Vector3.zero }).WithCoupling(new CouplingSpec(kingpin, point));
         }
 
         /// <summary>

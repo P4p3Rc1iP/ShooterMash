@@ -9,6 +9,8 @@ namespace ShooterMashup.Building
         Wood,
         Stone,
         Iron,
+        /// <summary>Gorkamorka scrap: sheet metal on a frame. Light for vehicle bodies, a bit stronger than wood.</summary>
+        Scrap,
     }
 
     /// <summary>
@@ -55,6 +57,8 @@ namespace ShooterMashup.Building
                  "2.25 m, so it's 4 here: stone sticks out about 0.5 m at most.")]
         public MaterialStats stone = new MaterialStats(1000f, 100f, 0.125f, 4f);
         public MaterialStats iron = new MaterialStats(1500f, 20f, 0.077f, 0.077f);
+        [Tooltip("Scrap: sheet metal on a frame, a bit stronger than wood and reaching a little further sideways.")]
+        public MaterialStats scrap = new MaterialStats(300f, 15f, 0.1f, 0.15f);
         [Tooltip("The losses above are per this many metres of a piece (one 2.5 m grid unit or storey).")]
         public float lossLength = 2.5f;
 
@@ -73,6 +77,7 @@ namespace ShooterMashup.Building
         {
             BuildMaterial.Stone => stone,
             BuildMaterial.Iron => iron,
+            BuildMaterial.Scrap => scrap,
             _ => wood,
         };
     }

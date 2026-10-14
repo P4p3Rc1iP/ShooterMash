@@ -36,7 +36,7 @@ namespace ShooterMashup.Building
 
         static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
         static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
-        static readonly string[] MaterialNames = { "Wood", "Stone", "Iron" };
+        static readonly string[] MaterialNames = { "Wood", "Stone", "Iron", "Scrap" };
 
         public bool Equipped { get; private set; }
 

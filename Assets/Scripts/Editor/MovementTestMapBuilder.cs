@@ -105,6 +105,7 @@ namespace ShooterMashup.EditorTools
             area = Area("Off-road", OffRoadArea);
             BuildOffRoad();
             BuildCrashTest(new Vector3(-100f, 0f, 112f));
+            BuildVehicleLineup();
             BuildFlipTest(new Vector3(40f, 0f, 125f));
             BuildLoopTest(new Vector3(40f, 0f, 150f));
 
@@ -475,6 +476,33 @@ namespace ShooterMashup.EditorTools
             truck.buggyYaw = 90f;
             Label("rally truck: stand on the back and it drives\n(up to 150 km/h); step off and it stops",
                 new Vector3(0f, 4.5f, 11f), parent, 180f);
+        }
+
+        /// <summary>
+        /// A lineup of vehicles to drive, west of the off-road arrival, facing the rally track
+        /// (south): sit in one (F) and drive onto the track. Each has a sign with its drive,
+        /// engine and weight.
+        /// </summary>
+        static void BuildVehicleLineup()
+        {
+            var parent = Group("Vehicle lineup");
+            (VehicleShowcase.Design design, float x, string sign)[] lineup =
+            {
+                (VehicleShowcase.Design.Buggy, -212f, "buggy\nrear-wheel drive\nV6, 200 kW, 0.6 t"),
+                (VehicleShowcase.Design.Saloon, -220f, "saloon\nfront-wheel drive\nV6, 200 kW, 1.6 t"),
+                (VehicleShowcase.Design.Van, -228f, "van\nrear-wheel drive\nV8, 320 kW, 3.7 t"),
+                (VehicleShowcase.Design.RallyTruck, -237f, "rally truck\nall-wheel drive\n2 x V8, 640 kW, 2 t"),
+                (VehicleShowcase.Design.HeavyTruck, -247f, "heavy truck, 8x8\n15 t of iron\ndiesel, 420 kW, 20 t"),
+                (VehicleShowcase.Design.Semi, -258f, "semi, 6x4\ntrailer with 13 t of stone\ndiesel, 420 kW, 19 t"),
+            };
+            foreach ((VehicleShowcase.Design design, float x, string sign) in lineup)
+            {
+                var vehicle = new GameObject($"Lineup {design}").AddComponent<VehicleShowcase>();
+                vehicle.design = design;
+                vehicle.buggyPosition = new Vector3(x, 0f, -100f);
+                vehicle.buggyYaw = 180f;
+                Label(sign, new Vector3(x, 6.5f, -100f + 200f), parent, 180f);
+            }
         }
 
         /// <summary>

@@ -6,7 +6,7 @@ using UnityEngine;
 namespace ShooterMashup.Building
 {
     /// <summary>
-    /// Builds three example structures when play starts, through ordinary BuildCmds: they have
+    /// Builds four example structures when play starts, through ordinary BuildCmds: they have
     /// real support, show the support colours and collapse like anything a player builds.
     /// Together they use every piece in every material it comes in (a test checks this), so
     /// placements that fail, which are logged, double as a check on the pieces.
@@ -20,6 +20,8 @@ namespace ShooterMashup.Building
     ///   with small hips at both ends.
     /// - Watchtower (63° roof): stone, iron and wood legs, stairs up to the first floor from all
     ///   four sides, knee braces, ladders, a railed lookout with a steep roof; beside it a 1 m cottage.
+    /// - Scrap shack (south of the watchtower): Gorkamorka scrap pillars, walls and beams under a
+    ///   flat scrap roof, a patchwork front with a doorway, and an awning over a workbench.
     /// </summary>
     [RequireComponent(typeof(StructureManager))]
     public class BuildShowcase : MonoBehaviour
@@ -37,6 +39,8 @@ namespace ShooterMashup.Building
         public static readonly Vector3 DefaultFarm = new Vector3(44f, 0f, 22f);
         public static readonly Vector3 DefaultBarn = new Vector3(58f, 0f, 22f);
         public static readonly Vector3 DefaultTower = new Vector3(70f, 0f, 44f);
+        /// <summary>The scrap shack stands this far from the watchtower's corner (south of it).</summary>
+        public static readonly Vector3 ScrapShackOffset = new Vector3(0f, 0f, -14f);
 
         /// <summary>One piece of the plan.</summary>
         public struct Placement
@@ -84,6 +88,7 @@ namespace ShooterMashup.Building
             plan.Farmstead(farm);
             plan.Barn(barn);
             plan.Watchtower(tower);
+            plan.ScrapShack(tower + ScrapShackOffset);
             return plan.list;
         }
 
@@ -387,6 +392,46 @@ namespace ShooterMashup.Building
                 }
 
                 Cottage(o + new Vector3(-4f, 0, 10f), "63°", 2f, gableEnd: true);
+            }
+
+            /// <summary>
+            /// A 6 x 6 m scrap shack from `o` (its -x, -z corner): 3 m pillars at the corners and the
+            /// middle of the back, 3x3 walls on the back and sides, a patchwork front of 1x1 walls
+            /// with a doorway, beams round the top, a flat roof of 3x3 floors, and out front an
+            /// awning (a 1 m pillar and a 1 m beam) over a 1x1 workbench top.
+            /// </summary>
+            public void ScrapShack(Vector3 o)
+            {
+                const BuildMaterial Scrap = BuildMaterial.Scrap;
+                foreach (Vector3 p in new[] { new Vector3(0, 0, 0), new Vector3(2 * T, 0, 0), new Vector3(0, 0, 2 * T),
+                             new Vector3(2 * T, 0, 2 * T), new Vector3(T, 0, 2 * T) })
+                    Place("Pillar 3 m", Scrap, o + p);
+                for (int k = 0; k < 2; k++)
+                {
+                    Place("Wall 3x3", Scrap, o + new Vector3(H + T * k, 0, 2 * T));             // back
+                    Place("Wall 3x3", Scrap, o + new Vector3(0, 0, H + T * k), 90);              // west side
+                    Place("Wall 3x3", Scrap, o + new Vector3(2 * T, 0, H + T * k), 90);          // east side
+                }
+                // The front: 1x1 walls, leaving a doorway in the left-hand bay.
+                for (int col = 0; col < 6; col++)
+                for (int row = 0; row < 3; row++)
+                    if (!(col >= 1 && col <= 2 && row < 2))
+                        Place("Wall 1x1", Scrap, o + new Vector3(0.5f + col, row, 0));
+                // Beams round the top, flush with the pillar tops; the roof on them.
+                for (int k = 0; k < 2; k++)
+                {
+                    Place("Beam 3 m", Scrap, o + new Vector3(H + T * k, T - B, 0));
+                    Place("Beam 3 m", Scrap, o + new Vector3(H + T * k, T - B, 2 * T));
+                    Place("Beam 3 m", Scrap, o + new Vector3(0, T - B, H + T * k), 90);
+                    Place("Beam 3 m", Scrap, o + new Vector3(2 * T, T - B, H + T * k), 90);
+                }
+                for (int i = 0; i < 2; i++)
+                for (int j = 0; j < 2; j++)
+                    Place("Floor 3x3", Scrap, o + new Vector3(H + T * i, T, H + T * j));
+                // The awning: a short post out front, a beam back to the corner pillar, a bench top on it.
+                Place("Pillar 1 m", Scrap, o + new Vector3(2 * T + 1f, 0, 0));
+                Place("Beam 1 m", Scrap, o + new Vector3(2 * T + 0.5f, 1f - B, 0));
+                Place("Floor 1x1", Scrap, o + new Vector3(2 * T + 0.5f, 1f, 0));
             }
         }
     }
