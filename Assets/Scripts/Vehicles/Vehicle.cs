@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using ShooterMashup.Building;
+using ShooterMashup.Player;
 using UnityEngine;
 
 namespace ShooterMashup.Vehicles
@@ -499,7 +500,8 @@ namespace ShooterMashup.Vehicles
 
                 // Friction circle: the tyre can't push harder than its load allows.
                 var force = new Vector2(lateral, longitudinal);
-                float maxForce = t.grip * load;
+                // Slick surfaces (ice: the same flag that makes players slide) grip far less.
+                float maxForce = t.grip * load * (IsSlick(hit.collider) ? t.slickGrip : 1f);
                 if (force.magnitude > maxForce)
                     force *= maxForce / force.magnitude;
 
@@ -524,6 +526,9 @@ namespace ShooterMashup.Vehicles
                 body.AddTorque(Vector3.Cross(up, Vector3.up) * t.airUpright, ForceMode.Acceleration);
             }
         }
+
+        static bool IsSlick(Collider c) =>
+            c.TryGetComponent(out PmSurface surface) && (surface.flags & SurfaceFlags.Slick) != 0;
 
         /// <summary>The nearest hit along the wheel's ray that isn't the vehicle itself.</summary>
         bool CastWheel(Vector3 origin, Vector3 direction, float length, out RaycastHit best)

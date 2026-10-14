@@ -729,14 +729,11 @@ namespace ShooterMashup.EditorTools
             buggy.buggyPosition = new Vector3(7f, 0f, -6f);
             buggy.buggyYaw = 90f;
 
-            // A flatbed truck driving in circles east of the spawn: jump on the back to ride it.
-            // Sit in it (F) to drive it yourself; when you get out it carries on circling.
-            var truck = new GameObject("Circling truck").AddComponent<VehicleShowcase>();
-            truck.design = VehicleShowcase.Design.Truck;
-            truck.autopilot = true;
-            truck.buggyPosition = new Vector3(40f, 0f, 15f); // circles east of the hub, clear of the roads
-            truck.buggyYaw = 90f;
-            Label("circling truck:\njump on the back to ride it", new Vector3(37f, 5f, 2f), parent, 90f);
+            // An ice sheet east of the spawn, where the buggy is pointing: slick for players
+            // (SurfaceFlags.Slick) and vehicles alike (wheels grip a fraction as well on it).
+            var ice = Box("Ice sheet", new Vector3(50f, 0.05f, 0f), new Vector3(60f, 0.1f, 60f), matSlick, parent);
+            ice.AddComponent<PmSurface>().flags = SurfaceFlags.Slick;
+            Label("ice: slick for players and vehicles", new Vector3(20f, 3f, 0f), parent, 90f);
         }
 
         /// <summary>A portal at the hub to an area's arrival point, and one there back to the hub.</summary>

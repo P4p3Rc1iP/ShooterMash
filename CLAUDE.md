@@ -227,8 +227,8 @@ Agreed with the owner:
   copying `Assets` again, rebuild the test map in the copy first: script GUIDs in the copied
   `.meta` files differ from the copy's old scene.
 - Test map: menu **ShooterMashup > Build Movement Test Map** regenerates
-  `Assets/Scenes/MovementTest.unity`. You spawn at a hub at the origin with a buggy, a truck
-  circling east of it to ride on, three portals (walk through; each area has one back) and roads
+  `Assets/Scenes/MovementTest.unity`. You spawn at a hub at the origin with a buggy facing a 60 m
+  ice sheet east of it (slick for players and vehicles: wheels get `slickGrip`, 15%), three portals (walk through; each area has one back) and roads
   to three areas, each built in its own space: **character tests** (z +140, arriving in the
   middle with groups around you: stairs, ramps and crates; tunnels and lean corner; ladder and
   fall towers; water and slime tanks and slick floor; moving platforms: elevator, slider,

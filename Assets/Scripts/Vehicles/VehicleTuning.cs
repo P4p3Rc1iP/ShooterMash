@@ -42,6 +42,8 @@ namespace ShooterMashup.Vehicles
         public float steerRate = 5f;
         [Tooltip("Rear wheel grip with the handbrake on, as a fraction of normal.")]
         [Range(0f, 1f)] public float handbrakeGrip = 0.35f;
+        [Tooltip("Grip on slick surfaces (ice, marked SurfaceFlags.Slick), as a fraction of normal.")]
+        [Range(0f, 1f)] public float slickGrip = 0.15f;
 
         [Header("Assists")]
         [Tooltip("The centre of mass is held no higher than this above the wheel centres (m), so tall builds don't tip over.")]

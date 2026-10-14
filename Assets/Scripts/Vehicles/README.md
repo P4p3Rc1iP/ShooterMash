@@ -5,8 +5,8 @@ driving model takes after Trailmakers, where whatever you build drives decently.
 
 ## Try it
 
-Rebuild the test map and press Play. A buggy stands to the right of the spawn hub; a flatbed
-truck circles east of it (jump on the back to ride it). Walk through the portal behind the spawn
+Rebuild the test map and press Play. A buggy stands to the right of the spawn hub, facing
+an ice sheet (tyres keep only 15% of their grip on it: try turning). Walk through the portal behind the spawn
 (or drive the road south) to the **off-road area**: a 1160 m rally loop with rollers, washboard,
 rocks and a table-top jump, where a rally truck on big wheels drives up to ~150 km/h while you
 stand on it, and stunt tests (a crash, a flip and a loop) by the arrival.
@@ -65,6 +65,8 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
   weight (every wheel carries its share, sitting 45% into its travel), grip in a friction
   circle, all wheels driven, the front half of the wheels steering (the frontmost most).
   Forward is where the seat faces.
+- **Surfaces:** wheels on a surface marked `SurfaceFlags.Slick` (the players' slick flag, via
+  `PmSurface`) keep only `slickGrip` (15%) of their grip: ice.
 - **Assists** (what makes anything drive): the centre of mass is held low, grip forces act
   partway up towards it (less body roll), the body levels itself to the ground and turns
   upright in the air, a little downforce (capped at 6 m/s², or fast vehicles squash their
@@ -79,8 +81,8 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
 
 - **Riding** works (see the player controller's `PlatformRider`): stand on a vehicle and you're
   carried along, and jumps on it land where you took off, even while it turns. Jump off the side
-  and you keep its speed; jump on from the ground and you land standing still on it. A truck
-  circles east of the spawn hub to try it (`VehicleAutopilot`; sit in it to drive it yourself).
+  and you keep its speed; jump on from the ground and you land standing still on it. The rally
+  truck in the off-road area only drives while you stand on it (`VehicleAutopilot`).
   Hard jolts (over 2 g) throw you. `StuntDriver` runs stunts once you stand on a vehicle (a crash
   into a concrete block, a flip off a one-sided kicker, a loop), steering in the vehicle's own
   frame so it works upside down, and puts the vehicle back afterwards (stunt tests in the
