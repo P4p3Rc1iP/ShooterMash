@@ -20,15 +20,17 @@ namespace ShooterMashup.Vehicles
         public float reach = 3f;
         public CameraMode cameraMode = CameraMode.Follow;
 
+        [Header("Assists (a player setting: Y cycles casual, standard, expert while driving)")]
+        public DrivingAssists.Level assistLevel = DrivingAssists.Level.Standard;
+
+        // How fast the throttle opens and the steering turns in at speed come with the assists.
         [Header("Keyboard (the keys are on or off, so the controls build up)")]
-        [Tooltip("Seconds from no throttle to full while W is held: tap it to feather the throttle.")]
-        public float throttleRiseTime = 0.5f;
         [Tooltip("Seconds for the throttle (or brake) to close when the key is let go.")]
         public float throttleReleaseTime = 0.12f;
         [Tooltip("Seconds from nothing to full brake while S is held.")]
         public float brakeRiseTime = 0.2f;
-        [Tooltip("Seconds to turn the wheel to full lock at a standstill, and at 30 m/s and faster (slower, for finer steering).")]
-        public float steerTimeSlow = 0.25f, steerTimeFast = 0.6f;
+        [Tooltip("Seconds to turn the wheel to full lock at a standstill (at speed it's slower, set by the assists).")]
+        public float steerTimeSlow = 0.25f;
         [Tooltip("Seconds for the steering to come back to the middle when the keys are let go.")]
         public float steerReturnTime = 0.18f;
 
@@ -66,8 +68,11 @@ namespace ShooterMashup.Vehicles
 
         float lookYaw, lookPitch, lastInputYaw, lastInputPitch, idle, orbitBaseYaw;
         float throttleNow, steerNow;          // the shaped keyboard controls
+        DrivingAssists assists;
+        const string AssistsKey = "ShooterMash.DrivingAssists";
         float baseFov, shakeAmount, tilt;    // the camera's feel
         Vector3 lastVelocity;
+        float joltSinceFrame;
         Vector3 camPosition, camVelocity;
         bool aimingAtSeat;
         GUIStyle style;
@@ -80,6 +85,9 @@ namespace ShooterMashup.Vehicles
             liftTool = GetComponent<LiftTool>();
             cam = GetComponentInChildren<Camera>();
             view = cam != null ? cam.GetComponent<PlayerView>() : null;
+            // The assist level is remembered between sessions (it's the player's, not the vehicle's).
+            assistLevel = (DrivingAssists.Level)Mathf.Clamp(PlayerPrefs.GetInt(AssistsKey, (int)assistLevel), 0, 2);
+            assists = DrivingAssists.For(assistLevel);
         }
 
         void Update()
@@ -115,8 +123,16 @@ namespace ShooterMashup.Vehicles
                 VehicleTelemetry.Show = !VehicleTelemetry.Show;
             VehicleTelemetry.Sample(Vehicle);
 
+            // Y cycles the assists (casual, standard, expert); T toggles traction control on top.
+            if (kb.yKey.wasPressedThisFrame)
+            {
+                assistLevel = DrivingAssists.Next(assistLevel);
+                assists = DrivingAssists.For(assistLevel);
+                Vehicle.Assists = assists;
+                PlayerPrefs.SetInt(AssistsKey, (int)assistLevel);
+            }
             if (kb.tKey.wasPressedThisFrame)
-                Vehicle.tuning.tractionSlack = Vehicle.tuning.tractionSlack < 0f ? 0f : -1f;
+                assists.tractionSlack = assists.tractionSlack < 0f ? 0f : -1f;
 
             if (kb.vKey.wasPressedThisFrame)
             {
@@ -131,6 +147,19 @@ namespace ShooterMashup.Vehicles
 
             if (kb.fKey.wasPressedThisFrame)
                 Exit();
+        }
+
+        /// <summary>
+        /// Jolts for the camera shake: the change in the vehicle's velocity per physics step (it
+        /// only changes then; measured per frame, ordinary acceleration looked like jolts).
+        /// </summary>
+        void FixedUpdate()
+        {
+            if (!Seated || Vehicle == null || Vehicle.Body == null)
+                return;
+            Vector3 velocity = Vehicle.Body.linearVelocity;
+            joltSinceFrame = Mathf.Max(joltSinceFrame, (velocity - lastVelocity).magnitude / Time.fixedDeltaTime);
+            lastVelocity = velocity;
         }
 
         void LateUpdate()
@@ -148,19 +177,19 @@ namespace ShooterMashup.Vehicles
 
         /// <summary>
         /// Keys are on or off; the controls build up from them. The throttle opens over
-        /// throttleRiseTime (tap W to feather it) and closes quickly; braking comes on faster.
+        /// the assists' throttleRiseTime (tap W to feather it) and closes quickly; braking comes on faster.
         /// Steering turns in more slowly the faster you go (finer at speed) and comes back quickly.
         /// </summary>
         void Shape(float throttleKeys, float steerKeys, float dt)
         {
-            float rise = throttleKeys < 0f ? brakeRiseTime : throttleRiseTime;
+            float rise = throttleKeys < 0f ? brakeRiseTime : assists.throttleRiseTime;
             if (throttleKeys == 0f || Mathf.Sign(throttleKeys) != Mathf.Sign(throttleNow) && throttleNow != 0f)
                 throttleNow = Mathf.MoveTowards(throttleNow, 0f, dt / Mathf.Max(throttleReleaseTime, 0.01f));
             else
                 throttleNow = Mathf.MoveTowards(throttleNow, throttleKeys, dt / Mathf.Max(rise, 0.01f));
 
             float speed = Vehicle != null ? Mathf.Abs(Vehicle.ForwardSpeed) : 0f;
-            float turnIn = Mathf.Lerp(steerTimeSlow, steerTimeFast, speed / 30f);
+            float turnIn = Mathf.Lerp(steerTimeSlow, assists.steerTimeFast, speed / 30f);
             bool returning = steerKeys == 0f || steerNow != 0f && Mathf.Sign(steerKeys) != Mathf.Sign(steerNow);
             steerNow = returning
                 ? Mathf.MoveTowards(steerNow, 0f, dt / Mathf.Max(steerReturnTime, 0.01f))
@@ -191,6 +220,7 @@ namespace ShooterMashup.Vehicles
         {
             Vehicle = v;
             v.Driver = this;
+            v.Assists = assists;
             if (buildTool != null) { buildTool.Unequip(); buildTool.enabled = false; }
             if (liftTool != null) { liftTool.Unequip(); liftTool.enabled = false; }
             motor.enabled = false;
@@ -217,6 +247,7 @@ namespace ShooterMashup.Vehicles
             {
                 v.SetControls(0f, 0f, false);
                 v.Driver = null;
+                v.Assists = null;
                 feet = ExitSpot(v);
                 Vector3 f = v.transform.TransformDirection(v.Forward);
                 yaw = Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
@@ -276,6 +307,13 @@ namespace ShooterMashup.Vehicles
             Bounds local = Vehicle.LocalBounds();
             Vector3 target = t.TransformPoint(local.center) + Vector3.up * 0.5f;
             float size = local.extents.magnitude;
+            if (Vehicle.Towing != null)
+            {
+                // Towing: stand back far enough to see the trailer too.
+                Bounds trailer = Vehicle.Towing.LocalBounds();
+                Vector3 back = Vehicle.Towing.transform.TransformPoint(trailer.center);
+                size = Mathf.Max(size, (Vector3.Distance(target, back) + trailer.extents.magnitude) * 0.7f);
+            }
             Vector3 position;
             Quaternion rotation;
 
@@ -335,9 +373,9 @@ namespace ShooterMashup.Vehicles
             float speed = Mathf.Abs(Vehicle.ForwardSpeed);
             cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, baseFov + speedFov * Mathf.Clamp01(speed / fovSpeed), 1f - Mathf.Exp(-3f * dt));
 
-            Vector3 velocity = Vehicle.Body.linearVelocity;
-            float jolt = (velocity - lastVelocity).magnitude / dt;      // m/s²
-            lastVelocity = velocity;
+            // The hardest jolt since the last frame, measured per physics step (see FixedUpdate).
+            float jolt = joltSinceFrame;
+            joltSinceFrame = 0f;
             if (jolt > 25f)
                 shakeAmount = Mathf.Max(shakeAmount, Mathf.Min((jolt - 25f) * shakeStrength * 0.02f, 1f));
             shakeAmount = Mathf.MoveTowards(shakeAmount, 0f, shakeDecay * shakeAmount * dt + 0.01f * dt);
@@ -352,6 +390,10 @@ namespace ShooterMashup.Vehicles
             return Quaternion.Euler(0f, 0f, tilt);
         }
 
+        /// <summary>The vehicle itself or its trailer: the camera doesn't dodge these (it jittered behind the semi's trailer).</summary>
+        bool Own(Rigidbody body) =>
+            body != null && (body == Vehicle.Body || Vehicle.Towing != null && body == Vehicle.Towing.Body);
+
         /// <summary>Pull the camera in front of walls and terrain between it and the vehicle.</summary>
         Vector3 Unblocked(Vector3 from, Vector3 to)
         {
@@ -362,7 +404,7 @@ namespace ShooterMashup.Vehicles
             RaycastHit[] hits = Physics.SphereCastAll(from, 0.25f, d / length, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float nearest = length;
             foreach (RaycastHit h in hits)
-                if (h.collider.attachedRigidbody != Vehicle.Body && h.distance > 0f)
+                if (!Own(h.collider.attachedRigidbody) && h.distance > 0f)
                     nearest = Mathf.Min(nearest, h.distance);
             return from + d / length * nearest;
         }
@@ -388,7 +430,7 @@ namespace ShooterMashup.Vehicles
                 : Vehicle.WheelCount == 0 ? "  <color=#ffd966>(no wheels)</color>" : "";
             string text =
                 $"<b>{Vehicle.ForwardSpeed * 3.6f:0} km/h</b>   {Vehicle.Mass:0} kg   wheels on the ground {Vehicle.WheelsOnGround}/{Vehicle.WheelCount}{state}\n" +
-                $"<color=#aaa>W/S throttle and brake, A/D steer, Space handbrake, T traction control, V camera ({cameraMode}), F get out</color>";
+                $"<color=#aaa>W/S throttle and brake, A/D steer, Space handbrake, Y assists ({assists.level}), T traction control, V camera ({cameraMode}), F get out</color>";
             GUI.Label(new Rect(0, Screen.height - 120, Screen.width, 60), text, style);
             if (Vehicle.Lift == null && Vehicle.WheelCount > 0)
                 VehicleHud.Draw(Vehicle);

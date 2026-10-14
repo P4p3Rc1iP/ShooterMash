@@ -30,6 +30,7 @@ a flip and a loop) by the arrival.
 | W / S | throttle / brake, then reverse |
 | A / D | steer |
 | Space | handbrake (locks the rear wheels: they slide) |
+| Y | driving assists: casual → standard → expert |
 | T | traction control on / off (off: the engine can spin the wheels: burnouts, power slides) |
 | F5 | telemetry overlay (for tuning) |
 | V | camera: follow (default) → first person → free orbit (scroll zooms) |
@@ -75,6 +76,7 @@ VehicleEffects.cs     tyre smoke where tyres slide; SkidMarks.cs: the marks they
 VehicleAudio.cs       engine, tyre squeal and impact sounds, synthesised at start (no sound files)
 VehicleHud.cs         the driver's gauges: speed, gear, rev bar, TC light, what each wheel is doing
 VehicleTelemetry.cs   the F5 tuning overlay
+DrivingAssists.cs     the player's driving assists (casual, standard, expert)
 VehicleSoundBank.cs   recorded engine loops per engine piece (the asset is in Assets/Audio); VehicleSounds puts it in use
 VehicleShowcase.cs    the demo designs, built on a lift and dropped (the semi's trailer is coupled)
 VehicleAutopilot.cs   drives a vehicle round a path (the rally truck), optionally only with a rider
@@ -94,32 +96,53 @@ Riders.cs             is a player riding a vehicle?
   like collapsed building pieces). The first piece must rest on the lift.
 - **Mass** is each piece's volume times its material's density (wood 500, stone 2400, iron
   7800, scrap 200 kg/m³); wheels and engines have their own. Inertia comes from the pieces' boxes.
-- **Engines** drive the driven wheels on the ground, shared equally: with up to their pull at
-  low speed (low gears), above that with their power (force = power / speed), up to their top
-  speed, where a limiter cuts in. Air drag comes from the frontal area, so light fast cars are
-  held back at speed and heavy trucks hardly at all; tyres have rolling resistance.
+- **Engines** drive the driven wheels on the ground, each by how hard it presses on the ground
+  (the rear pulling away, the outside in a corner): with up to their pull at low speed (low
+  gears), above that with their power (force = power / speed), up to their top speed, where a
+  limiter cuts in. Air drag comes from the frontal area, so light fast cars are held back at
+  speed and heavy trucks hardly at all; tyres have rolling resistance.
 - **Wheels** are raycast suspension, no joints: a spring and damper per wheel, sized to the
-  weight that wheel carries (sitting 45% into its travel), the front half of the wheels steering
-  (the frontmost most). Forward is where the seat faces.
+  weight that wheel carries (sitting 45% into its travel). Forward is where the seat faces.
+- **Steering geometry.** The vehicle turns about a point between its rear (non-steering)
+  wheels, and every wheel points along its own circle round the turn's centre: the inner front
+  wheel turns more than the outer (Ackermann), and on a long truck the wheels behind the pivot
+  steer a little the other way, so no axle is dragged sideways (the 8x8 turns in 10 m). Up to
+  38° of lock.
 - **Tyres.** Each tyre works out the force that would stop it sliding sideways, plus the drive
   or brake asked of it, and gets as much as its grip allows: grip (0.75) times its load, about
-  1 g of cornering. Asked for more, it slides, and a sliding tyre grips less (75%) until the
-  slide dies down; its force then points along the slip, so a wheel spinning under power has
-  little sideways grip left. That's what makes the back of a rear-wheel-drive car step out
+  1 g of cornering. Asked for more it holds on at the limit, and only once it actually slides
+  (over 1.5 m/s: sideways, spinning or skidding) does it let go: a sliding tyre grips less (75%)
+  until the slide dies down, its force pointing along the slip, so a wheel spinning under power
+  has little sideways grip left. That's what makes the back of a rear-wheel-drive car step out
   under power, a front-wheel-drive one push wide, and a handbrake turn spin.
 - **Surfaces:** wheels on a surface marked `SurfaceFlags.Slick` (the players' slick flag, via
   `PmSurface`) keep only `slickGrip` (15%) of their grip: ice.
-- **Assists** (what makes anything drive):
-  - steering: at speed full lock asks for about what the tyres can give, and grows by the slip
-    angle while sliding, so you can always catch a slide (countersteer);
-  - traction control: a driven wheel is never pushed past its grip by the engine alone (set
-    `tractionSlack` above 0 for wheelspin, -1 to turn it off; T toggles it while driving);
+- **Driving assists** are the player's (`DrivingAssists`, Y cycles them while driving, and
+  they're remembered); the vehicle is the same whoever drives it:
+
+  | | Casual | Standard | Expert |
+  | --- | --- | --- | --- |
+  | Traction control | keeps grip free for cornering | stops wheelspin from drive alone | off |
+  | ABS | on | on | off: brakes lock |
+  | Stability control (ESC light) | strong, past 6° of slip | light, past 10° | off |
+  | Understeer limiter | on | on | off |
+  | Steering lock at speed | at the tyres' limit | just past it | much freer |
+  | Rollover assist | from 20° | from 30° | off |
+  | Throttle / steering build-up | gentle | medium | sharp |
+
+  T toggles traction control on top of any level. The understeer limiter eases the lock off
+  while the steered tyres slide sideways, so holding full lock gives the tightest turn the
+  tyres allow instead of a plough; countersteer is always possible (lock grows by the slip angle).
+- **Vehicle assists** (what makes anything drive, whoever drives it):
   - springs sized per wheel from where the weight sits (also a trailer's weight on its tractor),
     so a loaded truck sits level;
   - body roll is mostly real: the springs resist leaning less than bouncing (`rollStiffness`
-    0.3: our vehicles are twice as wide as real ones, so they'd hardly lean otherwise), the
-    centre of mass is only held down for very tall builds, and a rollover assist pushes back
-    past 30° of lean. A tall, loaded van leans hard and lifts a wheel in a fast corner;
+    0.3: our vehicles are twice as wide as real ones, so they'd hardly lean otherwise; the demo
+    designs set their own until suspension parts exist: buggy 1.2, saloon and rally truck 0.6,
+    van 0.35), and the centre of mass is only held down for very tall builds. A tall, loaded van
+    leans hard and lifts a wheel in a fast corner. Each wheel's roll spring pairs with the wheel
+    across the same axle (the nearest one on the other side of the centre of mass, within half a
+    metre along); an unpaired wheel just has its own spring;
   - the body turns upright in the air, a little downforce (at most 4 m/s²), extra gravity, a
     low-friction body (scrapes skid instead of braking hard), and it holds still when parked.
 - **Keyboard.** The keys are on or off, so the controls build up (`VehicleDriver`): the throttle
@@ -149,6 +172,21 @@ Riders.cs             is a player riding a vehicle?
 - **The lift** freezes the vehicle (kinematic body) and sets its pose; taking it away makes the
   body dynamic again. Putting a vehicle on it rests the vehicle's lowest point (usually the
   tyres at full droop) on the platform; adding parts that hang lower raises it.
+
+## Backlog (next session, from the owner's test drive on 2026-10-15)
+
+- **Heavy truck's lean returns slowly.** After a corner it rolls back upright too lazily, which
+  feels off (look at roll damping and the soft roll stiffness on heavy, tall builds).
+- **Casual is over-tuned.** It should still allow drifting (stability control and the
+  cornering-aware traction control are probably too strong).
+- **Standard makes driving fast too hard.** It's easy to lose control, especially when power
+  spins the wheels while already going fast, and once drifting it's hard to get out of it.
+  Most noticeable on the buggy; the rally truck feels much better by comparison.
+- **More test cars:** a RWD muscle car, a FWD hatchback and a 4x4 rally car.
+- **Rolling hills** to test the feel in more representative terrain than the flat floor.
+- Still open: gearbox as a part (ratios) with automatic or manual shifting as a player setting
+  (proposed, not agreed yet), and builder parts (tyres, suspension and anti-roll bars,
+  differentials, brakes, wings, ballast).
 
 ## Known gaps and next steps
 

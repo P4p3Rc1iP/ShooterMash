@@ -19,7 +19,7 @@ namespace ShooterMashup.Vehicles
         static readonly Color Air = new Color(0.45f, 0.45f, 0.45f);
 
         static GUIStyle big, small, label;
-        static float tcUntil;
+        static float tcUntil, escUntil;
 
         public static void Draw(Vehicle v)
         {
@@ -71,9 +71,15 @@ namespace ShooterMashup.Vehicles
                 tcUntil = Time.time + 0.2f;
             bool tc = Time.time < tcUntil;
             var tcRect = new Rect(right - 46f, barY + barH + 4f, 46f, 22f);
-            bool tcOff = v.tuning.tractionSlack < 0f;
+            bool tcOff = v.ActiveAssists.tractionSlack < 0f;
             Fill(tcRect, tcOff ? new Color(0.5f, 0.1f, 0.1f, 0.8f) : tc ? new Color(1f, 0.7f, 0.1f) : new Color(1f, 1f, 1f, 0.1f));
             GUI.Label(tcRect, tcOff ? "<size=9>TC OFF</size>" : "TC", label);
+            // Stability control: lit while it pulls the car back from a slide.
+            if (v.StabilityActive)
+                escUntil = Time.time + 0.2f;
+            var escRect = new Rect(tcRect.x - 50f, tcRect.y, 46f, 22f);
+            Fill(escRect, Time.time < escUntil ? new Color(1f, 0.7f, 0.1f) : new Color(1f, 1f, 1f, 0.1f));
+            GUI.Label(escRect, "ESC", label);
 
             // Steering: where the front wheels point (white) against where the car is going (blue),
             // both from straight ahead, over the lock there is (the band). Line them up to steer
@@ -87,7 +93,7 @@ namespace ShooterMashup.Vehicles
             Fill(new Rect(Px(v.SlipAngle) - 2f, steerY - 3f, 4f, 18f), Lock);
             Fill(new Rect(Px(v.SteerAngle) - 1.5f, steerY, 3f, 12f), Color.white);
             GUI.Label(new Rect(x, steerY + 13f, right - x, 18f),
-                $"steering {v.SteerAngle:0}°   <color=#4d8cff>slip {v.SlipAngle:0}°</color>   lean {v.RollAngle:0}°", small);
+                $"steering {v.SteerAngle:0}°   <color=#4d8cff>slip {v.SlipAngle:0}°</color>   lean {v.RollAngle:0}°   <color=#aaa>assists {v.ActiveAssists.level}</color>", small);
 
             GUI.Label(new Rect(x, panel.yMax - 40f, right - x, 38f),
                 "<color=#5bd95b>grip</color>  <color=#ff9a1a>sliding</color>  <color=#ff2a1a>wheelspin</color>  " +

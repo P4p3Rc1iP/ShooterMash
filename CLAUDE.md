@@ -177,8 +177,21 @@ Agreed with the owner:
   at speed). Body roll is mostly real now (owner: cars were too rigid; a loaded van should almost
   roll): `rollStiffness` 0.3, centre of mass only held down for very tall builds, a rollover
   assist past 30°.
+- **Assists and steering (2026-10-15):** driving assists are a player setting (`DrivingAssists`,
+  Y cycles casual / standard / expert, remembered): traction control (casual keeps grip free for
+  cornering), ABS, stability control, an understeer limiter, steering lock at speed, rollover
+  assist and throttle/steering build-up. The vehicle's physics and parts don't change. Steering
+  geometry: every wheel follows its own circle about a pivot between the rear (non-steering)
+  wheels (Ackermann; on multi-axle trucks the rear axles steer slightly), up to 38°. Tyres hold
+  full grip at the limit and only "let go" (75%) once they slide over 1.5 m/s. Drive is shared
+  by wheel load. The owner liked the trucks' lean but found it too much on the buggy: until
+  suspension parts exist the demo designs set their own `rollStiffness`. Gearbox: the owner sees
+  manual vs auto as a build decision or a player mode (not built yet).
 
 ## To-do / open questions
+
+- **Vehicle backlog (2026-10-15):** see "Backlog" in `Assets/Scripts/Vehicles/README.md` (heavy
+  truck lean recovery, assist tuning for casual and standard, more test cars, rolling hills).
 
 - **Open building topics (raised 2026-10-12):** stair width (1 and 3 m wide stairs now, still
   being tried out), ladders (wood ladder pieces added 2026-10-12, more to try), and roofs (45°, 27° and 63° sets with corners, caps and
@@ -216,6 +229,10 @@ Agreed with the owner:
   deck rising to meet you) left the fall speed in place, and ET's walk code ("keep your speed on
   slopes") then turned it into a 6 m/s run along any slightly tilted floor. Landing now clips the
   velocity against the ground (`GroundTrace`), as hitting it would have.
+- A Rigidbody's velocity only changes on physics steps (50 Hz), but frames run at hundreds per
+  second. Anything that measures acceleration from it (jolts, camera shake) must do so per physics
+  step (`FixedUpdate`): per frame, ordinary acceleration showed up as huge jolts every 20 ms and
+  shook the camera all the time.
 
 ## Testing
 

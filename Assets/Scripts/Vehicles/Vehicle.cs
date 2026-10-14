@@ -43,6 +43,7 @@ namespace ShooterMashup.Vehicles
             public float weightShare;     // the fraction of the vehicle's weight it carries standing still
             public float fifthWheelShare; // the fraction of a load on the fifth wheel it carries
             public Wheel partner;         // the wheel across the axle from it, for the anti-roll bar
+            public float fromPivot, lateral; // ahead of the turning pivot, and right of the middle (m)
         }
 
         static readonly RaycastHit[] Hits = new RaycastHit[16];
@@ -59,6 +60,7 @@ namespace ShooterMashup.Vehicles
         float wheelbase = 3f;             // front to rear wheels (m), for the steering assist
         float frontalArea = 4f;           // across times height (m²), for air drag
         float throttle, steerInput, steer;
+        float steerScale = 1f;            // the understeer limiter's cut
         bool handbrake;
         float power, pull;               // the engines' (W, N)
         bool hasKingpin, hasFifthWheel;
@@ -106,6 +108,13 @@ namespace ShooterMashup.Vehicles
         public bool Controlled => Driver != null || Autopilot;
         /// <summary>The throttle as given: -1..1.</summary>
         public float Throttle => throttle;
+        /// <summary>The driver's assists (set by VehicleDriver), or null: the standard ones.</summary>
+        public DrivingAssists Assists { get; set; }
+        static readonly DrivingAssists StandardAssists = DrivingAssists.For(DrivingAssists.Level.Standard);
+        /// <summary>The assists in use now.</summary>
+        public DrivingAssists ActiveAssists => Assists ?? StandardAssists;
+        /// <summary>Stability control pushed the car back towards where it's going this step.</summary>
+        public bool StabilityActive { get; private set; }
         /// <summary>Traction control held a driven wheel back this step.</summary>
         public bool TractionControlActive { get; private set; }
         /// <summary>The engine runs: someone sits in it, or the autopilot is actually driving it.</summary>
@@ -511,7 +520,6 @@ namespace ShooterMashup.Vehicles
                 minAlong = Mathf.Min(minAlong, along);
                 maxAlong = Mathf.Max(maxAlong, along);
             }
-            wheelbase = wheels.Count > 1 ? Mathf.Max(maxAlong - minAlong, 0.5f) : 3f;
             WeightShares();
             // Anti-roll bars: each wheel pairs with the one across the same axle.
             Vector3 across = Vector3.Cross(Vector3.up, forward);
@@ -540,6 +548,25 @@ namespace ShooterMashup.Vehicles
                 float along = Vector3.Dot(w.anchor - centerOfMass, forward);
                 w.steerFactor = maxAlong - mid > 0.25f ? Mathf.Clamp01((along - mid) / (maxAlong - mid)) : 0f;
             }
+            // Steering geometry: the vehicle turns about a point between its rear (non-steering)
+            // wheels, and every wheel points along its own circle round the turn's centre: the
+            // inner front wheel turns more than the outer (Ackermann), and on a long truck the
+            // wheels behind the pivot steer a little the other way, so no axle is dragged sideways.
+            float pivot = 0f;
+            int rearWheels = 0;
+            foreach (Wheel w in wheels)
+                if (w.steerFactor <= 0f)
+                {
+                    pivot += Vector3.Dot(w.anchor - centerOfMass, forward);
+                    rearWheels++;
+                }
+            pivot = rearWheels > 0 ? pivot / rearWheels : mid;
+            foreach (Wheel w in wheels)
+            {
+                w.fromPivot = Vector3.Dot(w.anchor - centerOfMass, forward) - pivot;
+                w.lateral = Vector3.Dot(w.anchor - centerOfMass, across);
+            }
+            wheelbase = wheels.Count > 1 ? Mathf.Max(maxAlong - pivot, 0.5f) : 3f;
         }
 
         /// <summary>
@@ -636,6 +663,7 @@ namespace ShooterMashup.Vehicles
         public void Simulate(float dt)
         {
             VehicleTuning t = tuning;
+            DrivingAssists a = Assists ?? StandardAssists;
             body.AddForce(Vector3.down * t.extraGravity, ForceMode.Acceleration);
             // Air drag, by the vehicle's frontal area: what holds fast light cars back, hardly a heavy truck.
             Vector3 airVelocity = body.linearVelocity;
@@ -676,7 +704,7 @@ namespace ShooterMashup.Vehicles
             // Assist: at speed, full lock asks for about what the tyres can give (steerGripMargin
             // times it), so steering stays near the limit instead of far past it. Sliding, the lock
             // grows by the slip angle, so you can always steer into a slide (countersteer assist).
-            float cornering = t.grip * gravity * t.steerGripMargin;
+            float cornering = t.grip * gravity * a.steerGripMargin;
             float gripLock = Mathf.Atan(wheelbase * cornering / Mathf.Max(speed * speed, 1f)) * Mathf.Rad2Deg;
             float maxSteer = Mathf.Min(t.maxSteer, gripLock);
             Vector3 flatVelocity = Vector3.ProjectOnPlane(body.linearVelocity, up);
@@ -686,19 +714,34 @@ namespace ShooterMashup.Vehicles
                 maxSteer = Mathf.Min(maxSteer + slipAngle, t.maxSteer);  // the grip limit, measured from where it's going
             }
             SteerLock = maxSteer;
+            // Understeer limiter (assist): while the steered tyres slide sideways, ease the lock off
+            // until they grip again; let it back as they do.
+            bool frontSliding = false;
+            foreach (Wheel w in wheels)
+                if (w.steerFactor > 0f && w.sliding && !w.spinning && !w.locked)
+                    frontSliding = true;
+            steerScale = a.understeerLimiter
+                ? Mathf.MoveTowards(steerScale, frontSliding ? 0.5f : 1f, (frontSliding ? 1.5f : 0.8f) * dt)
+                : 1f;
+            maxSteer *= steerScale;
             SteerAngle = steer * maxSteer;
             Vector3 com = body.worldCenterOfMass;
             Vector3 normalSum = Vector3.zero;
 
-            // Suspension rays first: the engines' force is shared by the driven wheels on the ground.
+            // Suspension rays first: the engines' force is shared by the driven wheels on the ground,
+            // each by how hard it presses on it (the rear pulling away, the outside in a corner).
             int drivenOnGround = 0;
+            float drivenLoad = 0f;
             foreach (Wheel w in wheels)
             {
                 Vector3 anchor = transform.TransformPoint(w.anchor);
                 float top = w.spec.travel * (1f - t.rideHeight);       // full bump above the anchor
                 w.grounded = CastWheel(anchor + up * top, -up, w.spec.travel + w.spec.radius, out w.hit);
                 if (w.grounded && w.spec.driven)
+                {
                     drivenOnGround++;
+                    drivenLoad += w.load;                // last step's: how hard each presses on the ground
+                }
             }
             float drive = 0f;
             if (!Parked && !Braking && throttleNow != 0f && drivenOnGround > 0)
@@ -707,14 +750,16 @@ namespace ShooterMashup.Vehicles
                 float limit = throttleNow > 0f ? TopSpeed : t.reverseSpeed;
                 float force = Mathf.Min(pull, power / Mathf.Max(v, 0.1f));     // low gears, then power
                 float limiter = Mathf.Clamp01((1f - v / limit) / 0.08f);       // eases off near top speed
-                drive = throttleNow * force * limiter / drivenOnGround;
+                drive = throttleNow * force * limiter;      // shared below by the driven wheels on the ground
             }
 
             foreach (Wheel w in wheels)
             {
                 float travel = w.spec.travel;
                 float length = travel + w.spec.radius;
-                w.steerAngle = w.steerFactor * steer * maxSteer;
+                // Each wheel along its own circle round the turn's centre (see SetupWheels).
+                float curvature = Mathf.Tan(steer * maxSteer * Mathf.Deg2Rad) / wheelbase;
+                w.steerAngle = Mathf.Clamp(Mathf.Atan2(w.fromPivot * curvature, 1f - w.lateral * curvature) * Mathf.Rad2Deg, -60f, 60f);
                 if (!w.grounded)
                 {
                     w.sliding = w.spinning = w.locked = false;
@@ -767,13 +812,17 @@ namespace ShooterMashup.Vehicles
                 if (Parked || (handbrake && controlled && rear))
                     longitudinal = -vRoll * share / dt;                         // locked (the handbrake locks the rear)
                 else if (Braking)
-                    longitudinal = -Mathf.Sign(vRoll) * Mathf.Min(t.braking * share, Mathf.Abs(vRoll) * share / dt);
+                    longitudinal = -Mathf.Sign(vRoll) * Mathf.Min(t.braking * share, Mathf.Abs(vRoll) * share / dt,
+                        a.abs ? capacity * 0.95f : float.MaxValue);                // ABS: never more than the tyre grips
                 else
                 {
                     // Assist (traction control): a driven wheel is never pushed more than a bit past its grip.
-                    float push = w.spec.driven ? drive * w.driveFactor : 0f;
-                    float most = capacity * (w.sliding ? t.slideGrip : 1f) * (1f + t.tractionSlack);
-                    if (t.tractionSlack >= 0f && Mathf.Abs(push) > most)
+                    float push = w.spec.driven && drivenOnGround > 0
+                        ? drive * w.driveFactor * (drivenLoad > 1f ? w.load / drivenLoad : 1f / drivenOnGround) : 0f;
+                    float most = capacity * (w.sliding ? t.slideGrip : 1f) * (1f + a.tractionSlack);
+                    if (a.tractionKeepsCornering)
+                        most = Mathf.Sqrt(Mathf.Max(0f, most * most - lateral * lateral));   // leaves the grip the corner needs
+                    if (a.tractionSlack >= 0f && Mathf.Abs(push) > most)
                     {
                         push = Mathf.Clamp(push, -most, most);
                         TractionControlActive = true;
@@ -787,15 +836,20 @@ namespace ShooterMashup.Vehicles
                 var demand = new Vector2(lateral, longitudinal);
                 float asked = demand.magnitude;
                 bool slow = Mathf.Abs(vRoll) < t.slideMinSpeed && Mathf.Abs(vSide) < t.slideMinSpeed;
+                // How fast the tread would slide over the ground: sideways, spinning (driven
+                // harder than it grips) or skidding (locked).
+                bool lockedNow = Parked || Braking && !a.abs || (handbrake && controlled && rear);
+                float slipNow = Mathf.Max(Mathf.Abs(vSide), lockedNow ? Mathf.Abs(vRoll)
+                    : Mathf.Max(0f, Mathf.Abs(longitudinal) / Mathf.Max(capacity, 1f) - 1f) * 10f);
                 if (slow)
                     w.sliding = false;                                         // parking and crawling stay sure-footed
-                else if (asked > capacity)
-                    w.sliding = true;
-                else if (asked < capacity * t.slideGrip)
+                else if (asked > capacity && slipNow > t.slideStartSlip)
+                    w.sliding = true;                                          // at the limit it grips; past it, it lets go
+                else if (asked < capacity * t.slideGrip || slipNow < t.slideStartSlip * 0.5f)
                     w.sliding = false;
                 float available = w.sliding ? capacity * t.slideGrip : capacity;
                 Vector2 force = demand;
-                bool locked = Parked || Braking || (handbrake && controlled && rear);
+                bool locked = lockedNow;
                 float spinUp = 0f;   // how much faster than the ground the tread turns (wheelspin)
                 if (asked > available)
                 {
@@ -859,12 +913,21 @@ namespace ShooterMashup.Vehicles
             Vector3 tumble = angular - up * Vector3.Dot(angular, up);
             RollAngle = Vector3.SignedAngle(Vector3.ProjectOnPlane(Vector3.up, fwdWorld), up, fwdWorld);
             SlipAngle = flatVelocity.sqrMagnitude > 4f ? Vector3.SignedAngle(Mathf.Sign(speed) * fwdWorld, flatVelocity, up) : 0f;
+            // Stability control: once the car slides further than stabilityAngle from where it's going,
+            // turn it back towards its path (real ones brake single wheels; this is the arcade version).
+            StabilityActive = false;
+            if (a.stability > 0f && WheelsOnGround > 0 && Mathf.Abs(speed) > 5f && Mathf.Abs(SlipAngle) > a.stabilityAngle)
+            {
+                float excess = Mathf.Abs(SlipAngle) - a.stabilityAngle;
+                body.AddTorque(up * (Mathf.Sign(SlipAngle) * excess * a.stability), ForceMode.Acceleration);
+                StabilityActive = true;
+            }
             if (WheelsOnGround > 0)
             {
                 Vector3 ground = normalSum.normalized;
                 Vector3 level = Vector3.Cross(up, ground);
                 float lean = Vector3.Angle(up, ground);
-                float catchUp = lean > t.rolloverAssistAngle ? (lean - t.rolloverAssistAngle) * t.rolloverAssist : 0f;
+                float catchUp = lean > a.rolloverAssistAngle ? (lean - a.rolloverAssistAngle) * a.rolloverAssist : 0f;
                 body.AddTorque(level * t.uprightStrength + level.normalized * catchUp - tumble * t.uprightDamping, ForceMode.Acceleration);
                 body.AddForce(-up * Mathf.Min(t.downforce * speed * speed, t.maxDownforce), ForceMode.Acceleration);
             }

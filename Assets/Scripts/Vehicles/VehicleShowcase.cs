@@ -72,6 +72,9 @@ namespace ShooterMashup.Vehicles
             if (v == null)
                 return;
             v.name = $"{design}";
+            // Until suspension parts exist, each design gets its own roll stiffness: small cars
+            // stiffer, the trucks soft (they lean, which suits them).
+            v.tuning.rollStiffness = RollStiffness(design);
             if (design == Design.Semi)
             {
                 // The trailer is built beside the tractor (lifts can't overlap), then coupled.
@@ -101,6 +104,16 @@ namespace ShooterMashup.Vehicles
                 pilot.waitForRider = autopilotWaitForRider;
             }
         }
+
+        /// <summary>How hard each design's springs resist leaning (see VehicleTuning.rollStiffness).</summary>
+        public static float RollStiffness(Design design) => design switch
+        {
+            Design.Buggy => 1.2f,
+            Design.Saloon => 0.6f,
+            Design.RallyTruck => 0.6f,
+            Design.Van => 0.35f,
+            _ => new VehicleTuning().rollStiffness,
+        };
 
         public static List<Placement> PlanFor(Design design) => design switch
         {

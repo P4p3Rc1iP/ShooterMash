@@ -7,7 +7,9 @@ namespace ShooterMashup.Vehicles
     /// How vehicles drive, for every vehicle; what differs per vehicle comes from its parts:
     /// engines (power, pull, top speed), wheels (size, travel, driven or free, tyre grip) and the
     /// mass of its pieces. The assists are what make anything a player builds drive decently,
-    /// Trailmakers style, without them having to think about suspension geometry.
+    /// Trailmakers style, without them having to think about suspension geometry. The driver's
+    /// own helpers (traction and stability control, ABS, steering lock, rollover assist) are in
+    /// DrivingAssists, a player setting.
     /// </summary>
     [Serializable]
     public class VehicleTuning
@@ -39,16 +41,14 @@ namespace ShooterMashup.Vehicles
         [Range(0.3f, 1f)] public float slideGrip = 0.75f;
         [Tooltip("How fast (m/s) a sliding wheel spins over the ground per times its grip it is driven with. More: a wheel sliding under power loses more sideways grip (power oversteer).")]
         public float wheelspinSlip = 2f;
-        [Tooltip("Traction control: a driven wheel is pushed at most this fraction past its grip (0: never spins, -1: off). More: more wheelspin, so powerful cars step out.")]
-        public float tractionSlack = 0f;
         [Tooltip("Below this speed over the ground (m/s) a tyre never slides, so parking and crawling stay sure-footed.")]
         public float slideMinSpeed = 2f;
+        [Tooltip("A tyre asked for more than its grip gives all its grip until it actually slides this fast (m/s: sideways, spinning or skidding); only then does it let go (slideGrip). So cornering on the limit is crisp, and slides are slides.")]
+        public float slideStartSlip = 1.5f;
         [Tooltip("Fraction of a wheel's sideways sliding cancelled per physics step (0..1).")]
         [Range(0f, 1f)] public float lateralStiffness = 0.5f;
         [Tooltip("Steering angle of the frontmost wheels at low speed (degrees).")]
-        public float maxSteer = 32f;
-        [Tooltip("Steering assist: at speed, full lock turns as tightly as the tyres allow times this (more: more understeer, and oversteer with power).")]
-        public float steerGripMargin = 1f;
+        public float maxSteer = 38f;
         [Tooltip("How fast the steering follows the input (per second). The driver's keyboard input is shaped on top of this (VehicleDriver).")]
         public float steerRate = 8f;
         [Tooltip("Grip on slick surfaces (ice, marked SurfaceFlags.Slick), as a fraction of normal.")]
@@ -65,10 +65,6 @@ namespace ShooterMashup.Vehicles
         public float uprightDamping = 1.2f;
         [Tooltip("Roll stiffness: how hard the springs resist leaning (a difference in compression across an axle), as a fraction of how hard they resist bouncing. Our vehicles are about twice as wide as real ones, so their springs alone hardly let them lean; below 1 they roll more. Above 1 it's an anti-roll bar.")]
         public float rollStiffness = 0.3f;
-        [Tooltip("Rollover assist: past this lean from the ground (degrees), the body is pushed back towards its wheels.")]
-        public float rolloverAssistAngle = 30f;
-        [Tooltip("Rollover assist strength (1/s² per degree past the angle). 0: off, so tall builds can roll.")]
-        public float rolloverAssist = 0.6f;
         [Tooltip("How hard the body turns upright in the air (1/s²), so jumps land on the wheels.")]
         public float airUpright = 1.5f;
         [Tooltip("Pushes the vehicle down at speed (m/s² per (m/s)²). It adds grip, so keep it small.")]
