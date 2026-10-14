@@ -5,11 +5,11 @@ driving model takes after Trailmakers, where whatever you build drives decently.
 
 ## Try it
 
-Rebuild the test map and press Play. A buggy stands to the right of the spawn hub, facing the
-road east to the **driving area** (or walk through the red portal). There: a rough test track
-(washboard, side ridges, dunes, a gap jump, rocks) and a closed race circuit (a sweeper, a
-chicane, a tight bend, an S-bend, a table-top jump, and bumps along the way). A race truck laps
-the circuit at up to 22 m/s and stops at the start line every lap: hop on the back to ride it.
+Rebuild the test map and press Play. A buggy stands to the right of the spawn hub; a flatbed
+truck circles east of it (jump on the back to ride it). Walk through the portal behind the spawn
+(or drive the road south) to the **off-road area**: a 1160 m rally loop with rollers, washboard,
+rocks and a table-top jump, where a rally truck on big wheels drives up to ~150 km/h while you
+stand on it, and stunt tests (a crash, a flip and a loop) by the arrival.
 
 | Input | Action |
 | --- | --- |
@@ -80,7 +80,7 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
 - **Riding** works (see the player controller's `PlatformRider`): stand on a vehicle and you're
   carried along, and jumps on it land where you took off, even while it turns. Jump off the side
   and you keep its speed; jump on from the ground and you land standing still on it. A truck
-  circles behind the spawn hub to try it (`VehicleAutopilot`; sit in it to drive it yourself).
+  circles east of the spawn hub to try it (`VehicleAutopilot`; sit in it to drive it yourself).
   Hard jolts (over 2 g) throw you. `StuntDriver` runs stunts once you stand on a vehicle (a crash
   into a concrete block, a flip off a one-sided kicker, a loop), steering in the vehicle's own
   frame so it works upside down, and puts the vehicle back afterwards (stunt tests in the
@@ -90,5 +90,4 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
 - Two wheel sizes (Wheel, and Big wheel: taller travel, faster, twice the push), one seat, no
   engines or fuel.
 - No crash damage; pieces don't break off. Vehicles don't damage buildings.
-- Vehicles only drive on colliders (fine for voxel terrain with colliders). The demo buggy gets
-  through the whole test track upright (at most ~11° of roll on the side ridges).
+- Vehicles only drive on colliders (fine for voxel terrain with colliders).

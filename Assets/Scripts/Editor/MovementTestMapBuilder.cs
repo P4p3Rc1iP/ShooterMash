@@ -14,8 +14,8 @@ namespace ShooterMashup.EditorTools
     /// Builds the graybox test map: a spawn hub with portals and roads to three areas. Character
     /// tests (stairs, ramps, jump crates, crouch and prone tunnels, a lean corner, ladders,
     /// fall-damage towers, water and slime tanks, a slick floor), building (the showcase,
-    /// diggable dirt, bridge cliffs) and driving (a rough track and a race circuit). Laid out in
-    /// metres on a 1 m dev grid.
+    /// diggable dirt, bridge cliffs) and off-road (a high-speed rally loop and stunt tests: crash,
+    /// flip, loop). Laid out in metres on a 1 m dev grid.
     /// </summary>
     public static class MovementTestMapBuilder
     {
@@ -27,7 +27,6 @@ namespace ShooterMashup.EditorTools
         // The hub (spawn, a buggy, portals) is at the origin; the areas are a short drive away.
         static readonly Vector3 CharacterArea = new Vector3(0f, 0f, 140f);
         static readonly Vector3 BuildingArea = new Vector3(-190f, 0f, 0f);
-        static readonly Vector3 DrivingArea = new Vector3(190f, 0f, 0f);
         static readonly Vector3 OffRoadArea = new Vector3(0f, 0f, -200f);
         // Where you arrive (feet) and which way you face, by portal or road.
         static readonly Vector3 HubArrival = new Vector3(0f, 0f, -4f);
@@ -37,7 +36,6 @@ namespace ShooterMashup.EditorTools
         static readonly Vector3 FarmCorner = new Vector3(34f, 0f, 24f);
         static readonly Vector3 BarnCorner = new Vector3(60f, 0f, 24f);
         static readonly Vector3 TowerCorner = new Vector3(84f, 0f, 44f);
-        static readonly (Vector3 at, float yaw) DrivingArrival = (new Vector3(108f, 0f, 0f), 90f);
         static readonly (Vector3 at, float yaw) OffRoadArrival = (new Vector3(-200f, 0f, -98f), 180f); // facing the rally truck
 
         static Transform root;
@@ -103,11 +101,6 @@ namespace ShooterMashup.EditorTools
 
             area = Area("Building", BuildingArea);
             BuildBuildingArea(new Vector3(56, 0, 8));
-
-            area = Area("Driving", DrivingArea);
-            BuildVehicleTrack(new Vector3(-70f, 0f, -60f), 0f);
-            List<Vector3> raceLine = BuildRaceTrack(new Vector3(-30f, 0f, -55f));
-            BuildRaceTruck(raceLine);
 
             area = Area("Off-road", OffRoadArea);
             BuildOffRoad();
@@ -358,30 +351,6 @@ namespace ShooterMashup.EditorTools
             parent.GetComponentInChildren<TextMesh>().characterSize = 0.06f;
         }
 
-
-        /// <summary>
-        /// A rough track for vehicles, 10 m wide, starting at `at` and running towards `yaw`
-        /// (0 = +z): washboard, ridges that lift one side at a time, two dunes, a jump with a
-        /// landing ramp, and a field of rocks. Built in the track's own space (forward is +z).
-        /// </summary>
-        static void BuildVehicleTrack(Vector3 at, float yaw)
-        {
-            var parent = Group("Vehicle track");
-            parent.SetLocalPositionAndRotation(at, Quaternion.Euler(0f, yaw, 0f));
-            const float width = 10f;
-            Label("vehicle test track\nwashboard, ridges, dunes, jump, rocks", new Vector3(0f, 3f, -1f), parent);
-
-            float z = Washboard(parent, 1f, 10, width) + 6f;
-            z = SideRidges(parent, z, 6, width) + 6f;
-            z = Dunes(parent, z, 2, width) + 4f;
-
-            // A jump: 15° up to 1.2 m, a 6 m gap, and a landing ramp down.
-            z = Slope(parent, "Jump ramp", z, 15f, 1.2f, width / 2f, 0.3f, matTarget);
-            z = Slope(parent, "Landing ramp", z + 6f, -15f, 1.2f, width / 2f, 0.3f, matWall) + 6f;
-
-            Rocks(parent, z, 14f, width, 30, 0.3f, 0.8f, 7);
-        }
-
         // Bumps, each laid out along +z of `parent` from `z`, across `width`. They return where they end.
 
         /// <summary>Low ridges a metre apart (boxes turned 45°: 21 cm tall).</summary>
@@ -403,18 +372,6 @@ namespace ShooterMashup.EditorTools
                     i % 2 == 0 ? matWall : matTrim, parent, Quaternion.Euler(45f, 0f, 0f));
             }
             return z + (count - 1) * spacing;
-        }
-
-        /// <summary>1 m tall humps, 8° up and down, 4 m apart.</summary>
-        static float Dunes(Transform parent, float z, int count, float width)
-        {
-            for (int d = 0; d < count; d++)
-            {
-                if (d > 0) z += 4f;
-                z = Slope(parent, "Dune up", z, 8f, 1f, width, 0.3f, matWall);
-                z = Slope(parent, "Dune down", z, -8f, 1f, width, 0.3f, matTrim);
-            }
-            return z;
         }
 
         /// <summary>Boxes of different sizes tilted up to `tilt` degrees, half buried, over `length` m. Seeded, so the map is the same every build.</summary>
@@ -445,85 +402,6 @@ namespace ShooterMashup.EditorTools
             Vector3 surfaceMid = new Vector3(0f, height / 2f, z + run / 2f);
             Box(name, surfaceMid - tilt * Vector3.up * (thick / 2f), new Vector3(width, thick, length), mat, parent, tilt);
             return z + run;
-        }
-
-        /// <summary>
-        /// A closed race circuit, 12 m wide between flat red and grey kerbs, starting at `start`
-        /// heading +x: a straight with a table-top jump (6 m wide in the middle, so you can go round
-        /// it), a wide sweeper, washboard, a chicane, side ridges, a tight bend, an S-bend, dunes on
-        /// the back straight, and rocks on the long straight back to the start. It's driven
-        /// anticlockwise. Built from straights and arcs; the last straight lengths are worked out
-        /// so the loop always closes. Returns its centre line (world points about 2 m apart), for
-        /// an autopilot to lap.
-        /// </summary>
-        static List<Vector3> BuildRaceTrack(Vector3 start)
-        {
-            var parent = Group("Race track");
-            parent.localPosition = start;
-            var track = new TrackBuilder(parent, 12f);
-            const float width = 12f;
-            Label("race track\nstart / finish", new Vector3(0f, 4f, 9f), parent, 90f);
-            Box("Start line", new Vector3(1f, 0.01f, 0f), new Vector3(1f, 0.02f, 12f), matSlick, parent);
-
-            track.Straight(25f);
-            // A table top: up, 8 m flat at 1 m, down. Fast jumps clear the top, slow ones land on it.
-            Transform jump = track.Section("Jump");
-            float z = Slope(jump, "Jump ramp", 0f, 15f, 1f, 6f, 0.3f, matTarget);
-            Box("Jump table", new Vector3(0f, 0.5f, z + 4f), new Vector3(6f, 1f, 8f), matTrim, jump);
-            Slope(jump, "Landing ramp", z + 8f, -15f, 1f, 6f, 0.3f, matWall);
-            Label("jump", new Vector3(0f, 3f, 0f), jump, 0f);
-            track.Straight(35f);
-
-            track.Arc(25f, 90f);                  // wide sweeper, left
-            Washboard(track.Section("Washboard"), 2f, 10, width);
-            track.Straight(15f);
-            track.Arc(15f, -35f);                 // chicane: right, left, right
-            track.Arc(15f, 70f);
-            track.Arc(15f, -35f);
-            SideRidges(track.Section("Side ridges"), 1.5f, 4, width);
-            track.Straight(10f);
-            track.Arc(10f, 90f);                  // tight left
-            track.Arc(15f, -40f);                 // S-bend: right, then left
-            track.Arc(15f, 40f);
-
-            // Heading back along -x now. Two 20 m corners close the loop; the straights between
-            // them make up the rest.
-            Vector3 q = track.Position;
-            float across = q.x, down = q.z - 40f;
-            if (across < 0f || down < 0f)
-                Debug.LogError($"Race track doesn't close: {across}, {down}");
-            if (across > 45f)
-                Dunes(track.Section("Dunes"), 5f, 2, width);
-            track.Straight(across);
-            track.Arc(20f, 90f);
-            Rocks(track.Section("Rocks"), 10f, Mathf.Min(30f, down - 15f), width - 2f, 25, 0.25f, 0.5f, 11);
-            track.Straight(down);
-            track.Arc(20f, 90f);
-
-            var line = new List<Vector3>();
-            foreach (Vector3 p in track.Line)
-                line.Add(parent.TransformPoint(p));
-            return line;
-        }
-
-        /// <summary>
-        /// A flatbed truck that laps the race circuit at speed, over its bumps and jump, stopping at
-        /// the start line for a few seconds each lap: hop on the back to ride it.
-        /// </summary>
-        static void BuildRaceTruck(List<Vector3> line)
-        {
-            if (Vector3.Distance(line[0], line[line.Count - 1]) < 0.1f)
-                line.RemoveAt(line.Count - 1);   // the loop's end is its start
-            var truck = new GameObject("Race truck").AddComponent<VehicleShowcase>();
-            truck.design = VehicleShowcase.Design.Truck;
-            truck.autopilot = true;
-            truck.autopilotPath = line.ToArray();
-            truck.buggyPosition = line[0];
-            Vector3 heading = line[1] - line[0];
-            truck.buggyYaw = Mathf.Atan2(heading.x, heading.z) * Mathf.Rad2Deg;
-            var parent = Group("Race truck sign");
-            parent.SetParent(root, false);
-            Label("race truck: laps the track,\nstops here every lap: hop on the back", line[0] + new Vector3(-4f, 3.5f, -8f), parent);
         }
 
         /// <summary>
@@ -828,7 +706,6 @@ namespace ShooterMashup.EditorTools
             }
         }
 
-
         /// <summary>
         /// The hub at the origin: where you spawn, with a buggy to drive and a portal to each area
         /// (walk through it). Roads lead out to the areas, which each have a portal back.
@@ -840,28 +717,26 @@ namespace ShooterMashup.EditorTools
 
             PortalPair("Building", new Vector3(-6f, 0f, 5f), -45f, BuildingArrival, parent, matDirt);
             PortalPair("Character tests", new Vector3(0f, 0f, 7f), 0f, CharacterArrival, parent, matSlick);
-            PortalPair("Driving", new Vector3(6f, 0f, 5f), 45f, DrivingArrival, parent, matTarget);
             PortalPair("Off-road", new Vector3(0f, 0f, -9f), 180f, OffRoadArrival, parent, matSlime);
 
             // Roads to the areas, for driving there.
             Road(new Vector3(0f, 0f, 10f), CharacterArrival.at, parent);
             Road(new Vector3(-8f, 0f, 0f), BuildingArrival.at, parent);
-            Road(new Vector3(8f, 0f, 0f), DrivingArrival.at, parent);
             Road(new Vector3(0f, 0f, -14f), OffRoadArrival.at, parent);
 
-            // A buggy to drive, facing the road to the driving area.
+            // A buggy to drive, facing east.
             var buggy = new GameObject("Hub buggy").AddComponent<VehicleShowcase>();
             buggy.buggyPosition = new Vector3(7f, 0f, -6f);
             buggy.buggyYaw = 90f;
 
-            // A flatbed truck driving in circles behind the spawn: jump on the back to ride it.
+            // A flatbed truck driving in circles east of the spawn: jump on the back to ride it.
             // Sit in it (F) to drive it yourself; when you get out it carries on circling.
             var truck = new GameObject("Circling truck").AddComponent<VehicleShowcase>();
             truck.design = VehicleShowcase.Design.Truck;
             truck.autopilot = true;
-            truck.buggyPosition = new Vector3(25f, 0f, -30f); // circles clear of the road south
+            truck.buggyPosition = new Vector3(40f, 0f, 15f); // circles east of the hub, clear of the roads
             truck.buggyYaw = 90f;
-            Label("circling truck:\njump on the back to ride it", new Vector3(25f, 4f, -22f), parent, 180f);
+            Label("circling truck:\njump on the back to ride it", new Vector3(37f, 5f, 2f), parent, 90f);
         }
 
         /// <summary>A portal at the hub to an area's arrival point, and one there back to the hub.</summary>

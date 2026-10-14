@@ -143,7 +143,7 @@ Agreed with the owner:
   velocity), so a crash throws you forwards and a crest dropping away floats you; a push up into
   you never is (the floor takes it). A sideways throw also lifts you 0.3 x its speed (max 5 m/s):
   ET's ground friction would otherwise stop an 18 m/s slide in ~1.5 m. Bumps rarely pass 2 g, so
-  ordinary riding (race and rally trucks) stays put. The stunt tests (off-road area) show it.
+  ordinary riding (even the rally truck at 150 km/h) stays put. The stunt tests (off-road area) show it.
 - **Flips and loops (tested 2026-10-14):** the rider follows the platform's full rotation, but the
   player is ET: world gravity, an upright box, floors up to 45°. So past ~45° of tilt you're
   airborne; while the vehicle is still under you (a straight-down cast) you're swung round with
@@ -228,17 +228,14 @@ Agreed with the owner:
   `.meta` files differ from the copy's old scene.
 - Test map: menu **ShooterMashup > Build Movement Test Map** regenerates
   `Assets/Scenes/MovementTest.unity`. You spawn at a hub at the origin with a buggy, a truck
-  circling behind it to ride on, three portals (walk through; each area has one back) and roads
+  circling east of it to ride on, three portals (walk through; each area has one back) and roads
   to three areas, each built in its own space: **character tests** (z +140, arriving in the
   middle with groups around you: stairs, ramps and crates; tunnels and lean corner; ladder and
   fall towers; water and slime tanks and slick floor; moving platforms: elevator, slider,
   carousel), **building** (x -190: the showcase, diggable dirt, bridge cliffs; the StructureManager stays at the world origin and the
-  showcase gets world corners), and **driving** (x +190: the rough test track and a closed race
-  circuit with a table-top jump and bumps (washboard, side ridges, dunes, rocks), laid out from
-  straights and arcs so it always closes; a race truck laps it at up to 22 m/s (`VehicleAutopilot`
-  following the centre line) and stops at the start line each lap so you can ride it), and
-  **off-road** (z -200, fourth hub portal: a 1160 m loop with two 400 m bumpy straights; a rally truck on
-  big wheels drives it only while someone stands on it, ~150 km/h on the north straight; and
+  showcase gets world corners), and **off-road** (z -200, behind the spawn: a 1160 m loop with two
+  400 m bumpy straights; a rally truck on big wheels drives it only while someone
+  stands on it, ~150 km/h on the north straight; and
   stunt tests by the arrival, each a cab-less flatbed on big wheels that runs once you stand on it
   and resets itself (`StuntDriver`): a crash into a concrete block narrower than its wheel track
   (90 km/h, throws you over it), a flip off a kicker under one side (90 km/h, self-levelling off)
