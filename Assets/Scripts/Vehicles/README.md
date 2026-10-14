@@ -67,7 +67,9 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
   Forward is where the seat faces.
 - **Assists** (what makes anything drive): the centre of mass is held low, grip forces act
   partway up towards it (less body roll), the body levels itself to the ground and turns
-  upright in the air, a little downforce, extra gravity, and it holds still when parked.
+  upright in the air, a little downforce (capped at 6 m/s², or fast vehicles squash their
+  springs flat), extra gravity, a frictionless body (scraping the ground or a rock skids instead
+  of braking hard: only the tyres grip), and it holds still when parked.
   Acceleration is the same for any weight until engines exist.
 - **The lift** freezes the vehicle (kinematic body) and sets its pose; taking it away makes the
   body dynamic again. Putting a vehicle on it rests the vehicle's lowest point (usually the
@@ -79,9 +81,12 @@ VehicleShowcase.cs    builds the demo buggy on a lift and drops it
   carried along, and jumps on it land where you took off, even while it turns. Jump off the side
   and you keep its speed; jump on from the ground and you land standing still on it. A truck
   circles behind the spawn hub to try it (`VehicleAutopilot`; sit in it to drive it yourself).
+  Hard jolts (over 2 g) throw you: `CrashTestDriver` drives a cab-less flatbed into a concrete
+  block once you stand on it, then puts it back (crash test in the off-road area).
 - **Multiplayer:** planned as driver authority: the driver's machine runs the vehicle's physics
   and others see a smoothed copy. Rigid-body physics can't be predicted like player movement.
-- One wheel size, one seat, no engines or fuel; every vehicle accelerates alike.
+- Two wheel sizes (Wheel, and Big wheel: taller travel, faster, twice the push), one seat, no
+  engines or fuel.
 - No crash damage; pieces don't break off. Vehicles don't damage buildings.
 - Vehicles only drive on colliders (fine for voxel terrain with colliders). The demo buggy gets
   through the whole test track upright (at most ~11° of roll on the side ridges).

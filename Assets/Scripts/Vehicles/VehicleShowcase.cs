@@ -18,7 +18,7 @@ namespace ShooterMashup.Vehicles
         public Vector3 buggyPosition = new Vector3(64f, 0f, 14f);
         public float buggyYaw;
 
-        public enum Design { Buggy, Truck, RallyTruck }
+        public enum Design { Buggy, Truck, RallyTruck, CrashTruck }
         [Tooltip("Which vehicle to build.")]
         public Design design = Design.Buggy;
         [Tooltip("Drive it in circles while nobody sits in it (to practise riding on it).")]
@@ -31,6 +31,8 @@ namespace ShooterMashup.Vehicles
         public float autopilotStopSeconds = 6f;
         [Tooltip("With the autopilot: only drive while a player is standing on it.")]
         public bool autopilotWaitForRider;
+        [Tooltip("Instead of the autopilot: a crash test, driving straight ahead at this speed (m/s) once someone stands on it. 0: off.")]
+        public float crashTestSpeed;
 
         public struct Placement
         {
@@ -47,9 +49,12 @@ namespace ShooterMashup.Vehicles
                 return;
             List<Placement> plan = design == Design.Truck ? TruckPlan()
                 : design == Design.RallyTruck ? TruckPlan("Big wheel")
+                : design == Design.CrashTruck ? TruckPlan("Big wheel", cab: false)
                 : BuggyPlan();
             Vehicle v = Build(structures, buggyPosition, buggyYaw, plan);
-            if (v != null && autopilot)
+            if (v != null && crashTestSpeed > 0f)
+                v.gameObject.AddComponent<CrashTestDriver>().speed = crashTestSpeed;
+            else if (v != null && autopilot)
             {
                 var pilot = v.gameObject.AddComponent<VehicleAutopilot>();
                 pilot.path = autopilotPath;
@@ -62,9 +67,10 @@ namespace ShooterMashup.Vehicles
         /// <summary>
         /// A flatbed truck: two 3x3 floors on axle beams (6 m long, 3 m wide), a seat at the front
         /// behind a cab wall of 1x1 walls, low rails and a tailgate round the bed, and a wheel on
-        /// each end of each axle (flush on the beam ends).
+        /// each end of each axle (flush on the beam ends). Without the cab (no seat either: it
+        /// drives towards +z), the bed is open at the front, for the crash test.
         /// </summary>
-        public static List<Placement> TruckPlan(string wheel = "Wheel")
+        public static List<Placement> TruckPlan(string wheel = "Wheel", bool cab = true)
         {
             const BuildMaterial wood = BuildMaterial.Wood;
             float beam = PieceCatalog.BeamSize, deck = beam + 0.2f;   // floor top
@@ -76,9 +82,12 @@ namespace ShooterMashup.Vehicles
             Place("Floor 3x3", new Vector3(0, beam, -1.5f));               // the bed
             Place("Floor 3x3", new Vector3(0, beam, 1.5f));
             Place("Beam 3 m", new Vector3(0, 0, 2.5f));                    // front axle
-            Place("Driver seat", new Vector3(0, deck, 2f));
-            foreach (float x in new[] { -1f, 0f, 1f })                     // cab wall behind the seat
-                Place("Wall 1x1", new Vector3(x, deck, 1.3f));
+            if (cab)
+            {
+                Place("Driver seat", new Vector3(0, deck, 2f));
+                foreach (float x in new[] { -1f, 0f, 1f })                 // cab wall behind the seat
+                    Place("Wall 1x1", new Vector3(x, deck, 1.3f));
+            }
             foreach (float x in new[] { -1.375f, 1.375f })                 // low rails along the bed
                 Place("Beam 3 m", new Vector3(x, deck, -1.5f), 90);
             Place("Beam 3 m", new Vector3(0, deck, -2.875f));              // tailgate

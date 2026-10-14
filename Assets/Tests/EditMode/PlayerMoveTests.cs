@@ -309,6 +309,59 @@ namespace ShooterMashup.Player.Tests
             Assert.AreEqual(5f, st.velocity.x, 0.01f, "keeps the platform's speed");
         }
 
+        /// <summary>A rider on the platform with a fake physics clock: each Carry is one 20 ms step.</summary>
+        PlatformRider StandOnWithClock(GameObject platform, System.Func<Vector3> platformVelocity, System.Func<double> clock)
+        {
+            Spawn(new Vector3(1f, 1f + StandOriginY, 5f));
+            Settle();
+            var rider = new PlatformRider((t, p) => platformVelocity(), clock);
+            rider.UpdateGround(ref st, pmove.GroundObject);
+            st.velocity = Vector3.zero;
+            return rider;
+        }
+
+        [Test]
+        public void HardJolt_ThrowsTheRider_GentleOnesDoNot()
+        {
+            GameObject platform = PlatformUnderfoot();
+            Vector3 velocity = new Vector3(30f, 0f, 0f);
+            double time = 0;
+            PlatformRider rider = StandOnWithClock(platform, () => velocity, () => time);
+
+            // Braking at 10 m/s² (under the 20 m/s² threshold): carried along, no slipping.
+            time += 0.02;
+            velocity.x -= 0.2f;
+            Carry(rider);
+            Assert.AreEqual(0f, st.velocity.x, 1e-4f, "gentle braking: feet don't slip");
+
+            // A crash: 29.8 to 0 m/s in one 20 ms step (1490 m/s²). All but 20 m/s² of it isn't
+            // passed on: the rider keeps going at almost the full speed, relative to the truck.
+            time += 0.02;
+            float before = velocity.x;
+            velocity.x = 0f;
+            Carry(rider);
+            Assert.AreEqual(before * (1f - 20f / (before / 0.02f)), st.velocity.x, 1e-3f, "thrown forwards");
+        }
+
+        [Test]
+        public void PlatformDroppingAway_FloatsTheRiderUp_ButPushingUpDoesNot()
+        {
+            GameObject platform = PlatformUnderfoot();
+            Vector3 velocity = Vector3.zero;
+            double time = 0;
+            PlatformRider rider = StandOnWithClock(platform, () => velocity, () => time);
+
+            time += 0.02;
+            velocity.y = 3f;          // shoved up hard: the floor carries the rider
+            Carry(rider);
+            Assert.AreEqual(0f, st.velocity.y, 1e-4f);
+
+            time += 0.02;
+            velocity.y = -3f;         // over a crest, falling away at 300 m/s²: the rider floats
+            Carry(rider);
+            Assert.Greater(st.velocity.y, 5f);
+        }
+
         /// <summary>Come down onto the platform (said to move at 5 m/s) from above, at `velocity`.</summary>
         void LandOn(GameObject platform, PlatformRider rider, Vector3 velocity)
         {

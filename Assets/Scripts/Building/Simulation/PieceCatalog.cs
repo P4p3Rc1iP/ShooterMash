@@ -182,7 +182,7 @@ namespace ShooterMashup.Building
             // A 1 m wheel (35 cm of travel, up to 26 m/s, about 94 km/h) and a 1.5 m off-road wheel (60 cm
             // of travel, up to 46 m/s, about 165 km/h, with 1.5 times the push).
             all.Add(WheelPiece("Wheel", 0.5f, 0.4f, 40f, 0.35f, 26f, 1f).In(wood, iron));
-            all.Add(WheelPiece("Big wheel", 0.75f, 0.55f, 90f, 0.6f, 46f, 1.5f).In(wood, iron));
+            all.Add(WheelPiece("Big wheel", 0.75f, 0.55f, 90f, 0.6f, 56f, 2f).In(wood, iron));
             all.Add(DriverSeat("Driver seat").In(wood));
             return all.ToArray();
         }

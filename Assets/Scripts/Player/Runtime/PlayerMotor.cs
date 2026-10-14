@@ -37,6 +37,8 @@ namespace ShooterMashup.Player
         public bool ridePlatforms = true;
         [Tooltip("Landing on a moving platform from elsewhere sticks: you stand still on it. Off: physically right (you slide if your speed doesn't match).")]
         public bool stickyLandings = true;
+        [Tooltip("Platform accelerations above this (m/s²) aren't passed on to riders, so a crash or a sharp crest throws you. 0: never thrown.")]
+        public float platformJolt = 20f;
 
         /// <summary>Raised for every movement event (footsteps, landings, jumps, steps...).</summary>
         public event Action<PmEvent> MoveEvent;
@@ -181,6 +183,7 @@ namespace ShooterMashup.Player
             if (ridePlatforms)
             {
                 rider.StickyLandings = stickyLandings;
+                rider.JoltThreshold = platformJolt;
                 rider.UpdateGround(ref state, pmove.GroundObject);
             }
             else

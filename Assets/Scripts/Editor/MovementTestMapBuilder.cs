@@ -38,7 +38,7 @@ namespace ShooterMashup.EditorTools
         static readonly Vector3 BarnCorner = new Vector3(60f, 0f, 24f);
         static readonly Vector3 TowerCorner = new Vector3(84f, 0f, 44f);
         static readonly (Vector3 at, float yaw) DrivingArrival = (new Vector3(108f, 0f, 0f), 90f);
-        static readonly (Vector3 at, float yaw) OffRoadArrival = (new Vector3(-150f, 0f, -105f), 180f); // facing the rally truck
+        static readonly (Vector3 at, float yaw) OffRoadArrival = (new Vector3(-200f, 0f, -98f), 180f); // facing the rally truck
 
         static Transform root;
         static Transform area;   // the area being built; groups go under it
@@ -111,6 +111,7 @@ namespace ShooterMashup.EditorTools
 
             area = Area("Off-road", OffRoadArea);
             BuildOffRoad();
+            BuildCrashTest(new Vector3(-100f, 0f, 112f));
 
             area = Area("Hub", Vector3.zero);
             BuildHub();
@@ -390,13 +391,13 @@ namespace ShooterMashup.EditorTools
             return z + count - 1f;
         }
 
-        /// <summary>35 cm ridges under one side at a time, `spacing` apart, so the body rolls left and right.</summary>
-        static float SideRidges(Transform parent, float z, int count, float width, float spacing = 2f)
+        /// <summary>Ridges (35 cm tall at the default size) under one side at a time, `spacing` apart, so the body rolls left and right.</summary>
+        static float SideRidges(Transform parent, float z, int count, float width, float spacing = 2f, float size = 0.5f)
         {
             for (int i = 0; i < count; i++)
             {
                 float side = i % 2 == 0 ? -1f : 1f;
-                Box($"Side ridge {i}", new Vector3(side * width / 4f, 0f, z + i * spacing), new Vector3(width / 2f, 0.5f, 0.5f),
+                Box($"Side ridge {i}", new Vector3(side * width / 4f, 0f, z + i * spacing), new Vector3(width / 2f, size, size),
                     i % 2 == 0 ? matWall : matTrim, parent, Quaternion.Euler(45f, 0f, 0f));
             }
             return z + (count - 1) * spacing;
@@ -414,8 +415,8 @@ namespace ShooterMashup.EditorTools
             return z;
         }
 
-        /// <summary>Tilted boxes of different sizes, half buried, over `length` m. Seeded, so the map is the same every build.</summary>
-        static float Rocks(Transform parent, float z, float length, float width, int count, float minHeight, float maxHeight, int seed)
+        /// <summary>Boxes of different sizes tilted up to `tilt` degrees, half buried, over `length` m. Seeded, so the map is the same every build.</summary>
+        static float Rocks(Transform parent, float z, float length, float width, int count, float minHeight, float maxHeight, int seed, float tilt = 20f)
         {
             var random = new System.Random(seed);
             float F(float min, float max) => min + (float)random.NextDouble() * (max - min);
@@ -423,7 +424,7 @@ namespace ShooterMashup.EditorTools
             {
                 var size = new Vector3(F(0.6f, 1.6f), F(minHeight, maxHeight), F(0.6f, 1.6f));
                 var center = new Vector3(F(-width / 2f, width / 2f), F(-0.15f, 0.1f), z + F(0f, length));
-                Box($"Rock {i}", center, size, matTrim, parent, Quaternion.Euler(F(-20f, 20f), F(0f, 90f), F(-20f, 20f)));
+                Box($"Rock {i}", center, size, matTrim, parent, Quaternion.Euler(F(-tilt, tilt), F(0f, 90f), F(-tilt, tilt)));
             }
             return z + length;
         }
@@ -524,55 +525,54 @@ namespace ShooterMashup.EditorTools
         }
 
         /// <summary>
-        /// A long off-road loop for high speed (about 960 m, 20 m wide, driven clockwise): two 300 m
-        /// straights joined by 70 m bends. The north straight has rollers, washboard, a long
-        /// table-top jump and rocks; the south one side ridges, bigger rollers and rocks. A rally
+        /// A long off-road loop for high speed (about 1160 m, 20 m wide, driven clockwise): two 400 m
+        /// straights joined by 70 m bends. The north straight has small rocks, washboard, long
+        /// rollers and a long table-top jump; the south one side ridges, bigger rollers and rocks.
+        /// The bumps are sized for the big wheels: they toss the truck about but rarely touch its
+        /// chassis, so it can still reach 150 km/h. A rally
         /// truck on big wheels waits at the start and only drives while someone stands on it,
-        /// up to 43 m/s (about 155 km/h).
+        /// up to 44 m/s (about 158 km/h).
         /// </summary>
         static void BuildOffRoad()
         {
             var parent = Group("Off-road track");
-            parent.localPosition = new Vector3(-150f, 0f, 80f);
+            parent.localPosition = new Vector3(-200f, 0f, 80f);
             const float width = 20f;
             var track = new TrackBuilder(parent, width, 4f);
             Label("off-road track\nstart", new Vector3(-8f, 4f, 11f), parent, 180f);
             Box("Start line", new Vector3(1f, 0.01f, 0f), new Vector3(1f, 0.02f, width), matSlick, parent);
 
-            // North straight, heading +x: 300 m.
+            // North straight, heading +x: 400 m. A flat run-up with small rocks (the suspension
+            // soaks them up), washboard, long gentle rollers, then the jump at full speed, and room
+            // to brake for the bend.
             track.Straight(20f);
-            Rollers(track.Section("Rollers"), 0f, 4, width, 0.6f, 4f, 10f);
-            track.Straight(100f);
-            track.Straight(20f);
-            Washboard(track.Section("Washboard"), 0f, 20, width);
-            track.Straight(25f);
-            track.Straight(20f);
-            Transform jump = track.Section("Jump");
-            float z = Slope(jump, "Jump ramp", 0f, 6f, 0.8f, 10f, 0.3f, matTarget);
-            Box("Jump table", new Vector3(0f, 0.4f, z + 12.5f), new Vector3(10f, 0.8f, 25f), matTrim, jump);
-            Slope(jump, "Landing ramp", z + 25f, -6f, 0.8f, 10f, 0.3f, matWall);
-            Label("jump", new Vector3(0f, 3f, 0f), jump, 0f);
-            track.Straight(45f);
-            track.Straight(20f);
-            Rocks(track.Section("Rocks"), 0f, 40f, width - 2f, 40, 0.2f, 0.4f, 21);
+            Rocks(track.Section("Small rocks"), 0f, 40f, width - 2f, 40, 0.1f, 0.25f, 21, 6f);
             track.Straight(40f);
-            track.Straight(10f);
+            track.Straight(20f);
+            Washboard(track.Section("Washboard"), 0f, 15, width);
+            track.Straight(60f);
+            Rollers(track.Section("Rollers"), 0f, 3, width, 0.5f, 2f, 10f);
+            track.Straight(110f);
+            track.Straight(15f);
+            Transform jump = track.Section("Jump");
+            float z = Slope(jump, "Jump ramp", 0f, 4f, 0.8f, 10f, 0.3f, matTarget);
+            Box("Jump table", new Vector3(0f, 0.4f, z + 12.5f), new Vector3(10f, 0.8f, 25f), matTrim, jump);
+            Slope(jump, "Landing ramp", z + 25f, -4f, 0.8f, 10f, 0.3f, matWall);
+            Label("jump", new Vector3(0f, 3f, 0f), jump, 0f);
+            track.Straight(135f);
 
             track.Arc(70f, -90f);                 // right
             track.Straight(20f);
             track.Arc(70f, -90f);
 
-            // South straight, heading -x: 300 m.
-            track.Straight(30f);
-            SideRidges(track.Section("Side ridges"), 0f, 8, width, 6f);
-            track.Straight(45f);
-            track.Straight(25f);
-            Rollers(track.Section("Big rollers"), 0f, 3, width, 0.8f, 5f, 8f);
-            track.Straight(75f);
-            track.Straight(25f);
-            Rocks(track.Section("Rocks 2"), 0f, 50f, width - 2f, 50, 0.2f, 0.45f, 23);
-            track.Straight(50f);
-            track.Straight(50f);
+            // South straight, heading -x: 400 m. Side ridges, big rollers, more small rocks.
+            track.Straight(40f);
+            SideRidges(track.Section("Side ridges"), 0f, 8, width, 6f, 0.35f);
+            track.Straight(90f);
+            Rollers(track.Section("Big rollers"), 0f, 3, width, 0.6f, 3f, 12f);
+            track.Straight(110f);
+            Rocks(track.Section("Small rocks 2"), 0f, 50f, width - 2f, 50, 0.08f, 0.18f, 23, 6f);
+            track.Straight(160f);
 
             track.Arc(70f, -90f);
             track.Straight(20f);
@@ -588,13 +588,38 @@ namespace ShooterMashup.EditorTools
             truck.design = VehicleShowcase.Design.RallyTruck;
             truck.autopilot = true;
             truck.autopilotPath = line.ToArray();
-            truck.autopilotMaxSpeed = 43f;
+            truck.autopilotMaxSpeed = 44f;
             truck.autopilotStopSeconds = 0f;
             truck.autopilotWaitForRider = true;
             truck.buggyPosition = line[0];
             truck.buggyYaw = 90f;
             Label("rally truck: stand on the back and it drives\n(up to 150 km/h); step off and it stops",
                 new Vector3(0f, 4.5f, 11f), parent, 180f);
+        }
+
+        /// <summary>
+        /// A crash test north of the off-road loop, heading +x: a flatbed on big wheels (no cab)
+        /// waits at the start; stand on it and it drives 90 km/h into a concrete block 100 m on,
+        /// throwing you off the front. The block is narrower than the truck's wheel track, so
+        /// the wheels pass either side and the chassis hits it (wheels would drive up a wider
+        /// one), and lower than the deck, so riders fly over it. The truck is put back once
+        /// you're off it.
+        /// </summary>
+        static void BuildCrashTest(Vector3 start)
+        {
+            var parent = Group("Crash test");
+            parent.localPosition = start;
+            const float run = 100f;
+            Box("Crash lane", new Vector3(run / 2f, 0.005f, 0f), new Vector3(run + 8f, 0.01f, 4f), matSlick, parent);
+            Box("Crash block", new Vector3(run + 1.5f, 0.5f, 0f), new Vector3(3f, 1f, 2.4f), matWall, parent);
+            Label("crash test: stand on the truck,\nit drives 90 km/h into the block ahead", new Vector3(-2f, 4f, 4f), parent, 180f);
+            Label("crash block", new Vector3(run + 1.5f, 2.5f, 0f), parent, -90f);
+
+            var truck = new GameObject("Crash truck").AddComponent<VehicleShowcase>();
+            truck.design = VehicleShowcase.Design.CrashTruck;
+            truck.crashTestSpeed = 25f;
+            truck.buggyPosition = parent.TransformPoint(Vector3.zero);
+            truck.buggyYaw = 90f;
         }
 
         /// <summary>Long, gentle humps `height` tall rising and falling at `angle`, `gap` apart.</summary>

@@ -14,6 +14,11 @@ namespace ShooterMashup.Player
     /// you're past its footprint you let go of it and keep its momentum. Landing on a platform from
     /// elsewhere sticks (see StickyLandings).
     ///
+    /// Riders have inertia for hard jolts only (see JoltThreshold): the part of the platform's
+    /// acceleration above it isn't passed on, so a truck slamming into a wall or dropping away
+    /// over a crest throws you (forwards, or up off the deck). Gentler acceleration is carried
+    /// as if your feet never slip, as before.
+    ///
     /// The carry follows the platform's physics pose, which is what its colliders (and so the
     /// player's ground checks) use. Platforms are drawn interpolated between physics steps, so
     /// ToDrawn and DrawnYawOffset move the drawn player and view onto the drawn platform.
@@ -30,15 +35,20 @@ namespace ShooterMashup.Player
         Rigidbody body;
         Vector3 lastPosition;
         Quaternion lastRotation;
+        Vector3 lastVelocity;       // the platform's velocity at the player, at the last physics step
+        double lastSampleTime;
         readonly Func<Transform, Vector3, Vector3> velocityOf;
+        readonly Func<double> physicsTime;
 
         /// <param name="velocityOf">
         /// Where a platform's velocity at a point comes from. By default: an IMovingPlatform on it,
         /// else its (non-kinematic) rigidbody.
         /// </param>
-        public PlatformRider(Func<Transform, Vector3, Vector3> velocityOf = null)
+        /// <param name="physicsTime">The physics clock (default: Time.fixedTimeAsDouble), for measuring jolts.</param>
+        public PlatformRider(Func<Transform, Vector3, Vector3> velocityOf = null, Func<double> physicsTime = null)
         {
             this.velocityOf = velocityOf ?? DefaultVelocity;
+            this.physicsTime = physicsTime ?? (() => Time.fixedTimeAsDouble);
         }
 
         /// <summary>
@@ -46,6 +56,21 @@ namespace ShooterMashup.Player
         /// still on it. Off: physically right, so you slide if your speed didn't match it.
         /// </summary>
         public bool StickyLandings { get; set; } = true;
+
+        /// <summary>
+        /// Platform accelerations up to this (m/s²) carry the player along; anything above it is
+        /// left out, so the player keeps going (a crash) or floats off (a crest). 0: no jolts.
+        /// Pushing up into the player is never left out: the floor takes that.
+        /// </summary>
+        public float JoltThreshold { get; set; } = 20f;
+
+        /// <summary>
+        /// A sideways jolt also knocks you off your feet: you're lifted this fraction of the speed
+        /// it threw you at (up to TripMaxLift m/s). The movement code's ground friction is made for
+        /// crisp control and would otherwise stop an 18 m/s slide within a metre and a half.
+        /// </summary>
+        public float TripLift { get; set; } = 0.3f;
+        public const float TripMaxLift = 5f;
 
         /// <summary>What the player is riding (standing on, or jumping above), or null.</summary>
         public Transform Platform => body != null ? body.transform : null;
@@ -105,6 +130,7 @@ namespace ShooterMashup.Player
                 Quaternion spin = Quaternion.Euler(0f, yaw, 0f);
                 state.velocity = spin * state.velocity;   // velocity is relative to the platform: it turns too
             }
+            Jolt(ref state);
 
             if (!state.onGround && !Above(state.origin))
                 LetGo(ref state);
@@ -142,7 +168,38 @@ namespace ShooterMashup.Player
                 body = now;
                 lastPosition = now.position;
                 lastRotation = now.rotation;
+                lastVelocity = velocityOf(now.transform, state.origin);
+                lastSampleTime = physicsTime();
             }
+        }
+
+        /// <summary>
+        /// Once per physics step: the part of the platform's change in velocity (at the player)
+        /// above the jolt threshold isn't passed on, so it comes off the player's velocity
+        /// relative to the platform. Physics time only advances in play mode.
+        /// </summary>
+        void Jolt(ref PlayerState state)
+        {
+            double time = physicsTime();
+            if (time <= lastSampleTime)
+                return;     // no physics step since the last frame
+            Vector3 velocity = velocityOf(body.transform, state.origin);
+            float dt = (float)(time - lastSampleTime);
+            Vector3 change = velocity - lastVelocity;
+            lastVelocity = velocity;
+            lastSampleTime = time;
+            if (JoltThreshold <= 0f)
+                return;
+            if (change.y > 0f)
+                change.y = 0f;      // pushed up: the floor carries that
+            float acceleration = change.magnitude / dt;
+            if (acceleration <= JoltThreshold)
+                return;
+            Vector3 thrown = -change * (1f - JoltThreshold / acceleration);
+            state.velocity += thrown;
+            float lift = Mathf.Min(TripLift * new Vector2(thrown.x, thrown.z).magnitude, TripMaxLift);
+            if (state.velocity.y < lift)
+                state.velocity.y = lift;
         }
 
         /// <summary>Leave the platform's frame, keeping its momentum.</summary>

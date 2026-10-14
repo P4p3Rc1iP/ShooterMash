@@ -56,8 +56,12 @@ namespace ShooterMashup.Vehicles
         public float airUpright = 1.5f;
         [Tooltip("Pushes the vehicle down at speed (m/s² per (m/s)²).")]
         public float downforce = 0.01f;
+        [Tooltip("Downforce never pushes harder than this (m/s²), or fast vehicles squash their springs flat.")]
+        public float maxDownforce = 6f;
         [Tooltip("Extra gravity on vehicles (m/s²), so they feel less floaty.")]
         public float extraGravity = 4f;
+        [Tooltip("The body is frictionless, so scraping the ground or a rock skids instead of braking hard (only the tyres grip).")]
+        public bool slipperyBody = true;
 
         [Header("Mass")]
         [Tooltip("Densities (kg/m³) of wood, stone and iron; a piece's mass is its volume times this.")]

@@ -138,6 +138,16 @@ Agreed with the owner:
   (owner's choice: you stand still on it; `PlayerMotor.stickyLandings`, off = physically right).
   It sits beside the deterministic simulation (which only reports `GroundObject`): the platform's
   motion is an input. Toggle: `PlayerMotor.ridePlatforms`.
+- **Thrown off (2026-10-14):** riders have inertia for hard jolts only. Platform acceleration above
+  `PlayerMotor.platformJolt` (20 m/s², 2 g) isn't passed on (the excess comes off the relative
+  velocity), so a crash throws you forwards and a crest dropping away floats you; a push up into
+  you never is (the floor takes it). A sideways throw also lifts you 0.3 x its speed (max 5 m/s):
+  ET's ground friction would otherwise stop an 18 m/s slide in ~1.5 m. Bumps rarely pass 2 g, so
+  ordinary riding (race and rally trucks) stays put. The crash test (off-road area) shows it.
+- Vehicle assists added for speed: the body is frictionless (`slipperyBody`, scrapes skid instead
+  of braking hard) and downforce is capped at 6 m/s² (`maxDownforce`; uncapped 0.01 v² squashed
+  the springs flat at 150 km/h, so the chassis hit every bump). Wheel pieces carry their own
+  travel, top speed and power: Wheel 0.5 m (26 m/s), Big wheel 0.75 m (56 m/s, power 2).
 
 ## To-do / open questions
 
@@ -220,5 +230,7 @@ Agreed with the owner:
   circuit with a table-top jump and bumps (washboard, side ridges, dunes, rocks), laid out from
   straights and arcs so it always closes; a race truck laps it at up to 22 m/s (`VehicleAutopilot`
   following the centre line) and stops at the start line each lap so you can ride it), and
-  **off-road** (z -200, fourth hub portal: a 960 m loop with long bumpy straights; a rally truck on
-  big wheels drives it only while someone stands on it, ~120 km/h on the track, 150 km/h on flat).
+  **off-road** (z -200, fourth hub portal: a 1160 m loop with two 400 m bumpy straights; a rally truck on
+  big wheels drives it only while someone stands on it, ~150 km/h on the north straight; and a
+  crash test by the arrival: stand on the cab-less flatbed and it drives 90 km/h into a concrete
+  block narrower than its wheel track, throwing you over it (`CrashTestDriver`, resets itself)).

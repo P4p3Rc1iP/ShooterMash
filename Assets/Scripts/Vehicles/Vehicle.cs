@@ -235,9 +235,28 @@ namespace ShooterMashup.Vehicles
 
         // ------------------------------------------------------------------ parts and mass
 
+        static PhysicsMaterial slipperyBody;
+
         /// <summary>After pieces changed: mass, centre of mass, inertia, wheels and seat.</summary>
         void Rebuild()
         {
+            // Assist: the body skids when it scrapes the ground or a rock, instead of braking hard
+            // on it (only the tyres grip), so bottoming out over bumps doesn't stop it dead.
+            if (tuning.slipperyBody)
+            {
+                if (slipperyBody == null)
+                    slipperyBody = new PhysicsMaterial("Vehicle body")
+                    {
+                        dynamicFriction = 0f,
+                        staticFriction = 0f,
+                        bounciness = 0f,
+                        frictionCombine = PhysicsMaterialCombine.Minimum,
+                        bounceCombine = PhysicsMaterialCombine.Minimum,
+                    };
+                foreach (Collider c in GetComponentsInChildren<Collider>())
+                    c.sharedMaterial = slipperyBody;
+            }
+
             wheels.Clear();
             SeatId = -1;
             forward = Vector3.forward;
@@ -497,7 +516,7 @@ namespace ShooterMashup.Vehicles
             {
                 Vector3 ground = normalSum.normalized;
                 body.AddTorque(Vector3.Cross(up, ground) * t.uprightStrength - tumble * t.uprightDamping, ForceMode.Acceleration);
-                body.AddForce(-up * (t.downforce * speed * speed), ForceMode.Acceleration);
+                body.AddForce(-up * Mathf.Min(t.downforce * speed * speed, t.maxDownforce), ForceMode.Acceleration);
             }
             else
             {

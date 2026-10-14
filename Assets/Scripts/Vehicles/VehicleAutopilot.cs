@@ -1,4 +1,3 @@
-using ShooterMashup.Player;
 using UnityEngine;
 
 namespace ShooterMashup.Vehicles
@@ -42,8 +41,6 @@ namespace ShooterMashup.Vehicles
         float[] along;      // distance along the path from its start to each point
         float[] allowed;    // the fastest speed the line's curvature allows at each point
         float lapLength;
-        PlayerMotor[] players = new PlayerMotor[0];
-        float nextScan;
 
         /// <summary>Is a player riding it right now?</summary>
         public bool HasRider { get; private set; }
@@ -72,20 +69,7 @@ namespace ShooterMashup.Vehicles
             FollowPath();
         }
 
-        bool Riding()
-        {
-            if (!waitForRider)
-                return false;
-            if (Time.time >= nextScan)
-            {
-                players = FindObjectsByType<PlayerMotor>(FindObjectsSortMode.None);
-                nextScan = Time.time + 1f;
-            }
-            foreach (PlayerMotor p in players)
-                if (p != null && p.enabled && p.Platform == transform)
-                    return true;
-            return false;
-        }
+        bool Riding() => waitForRider && Riders.On(transform);
 
         void FollowPath()
         {

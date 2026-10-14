@@ -87,8 +87,9 @@ Runtime/      Unity glue for a local player
 - You ride moving platforms (anything with a Rigidbody: vehicles, lifts, `MovingPlatform`s):
   `PlatformRider` carries and turns you (view and velocity) with it each frame. Jumping keeps you
   in its frame while you're above it; past its edge you let go and keep its velocity. Landing on
-  one from elsewhere sticks (`stickyLandings`). ET only had brush movers pushing you; this is
-  outside the deterministic step.
+  one from elsewhere sticks (`stickyLandings`). Jolts above `platformJolt` (2 g) aren't passed on,
+  so a crash throws you off (with a small lift: ET's ground friction would stop the slide dead).
+  ET only had brush movers pushing you; this is outside the deterministic step.
 - Landing clips your velocity against the ground even when the move didn't touch it (it ended
   within the ground check's reach). ET didn't, and its walk code then turned the fall speed into a
   run along any slightly tilted floor, flinging you sideways off a moving truck's deck.
