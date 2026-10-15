@@ -36,6 +36,7 @@ namespace ShooterMashup.Vehicles
         public bool waitForRider;
 
         Vehicle vehicle;
+        float lastSlip;   // the vehicle's slip angle last step
         int index;
         float waitUntil;
         float[] along;      // distance along the path from its start to each point
@@ -99,7 +100,11 @@ namespace ShooterMashup.Vehicles
             // Steer at a point ahead on the line, further ahead the faster we go.
             Vector3 target = PointAhead(6f + Mathf.Abs(currentSpeed) * 0.5f);
             float angle = Vector3.SignedAngle(forward, Flat(target - position), Vector3.up);
-            float steering = Mathf.Clamp(angle / 25f, -1f, 1f);
+            // Steer along with a slide that's swinging (its slip angle changing), or catching it at speed
+            // overshoots into a slide the other way.
+            float slipRate = (vehicle.SlipAngle - lastSlip) / Time.fixedDeltaTime;
+            lastSlip = vehicle.SlipAngle;
+            float steering = Mathf.Clamp((angle + Mathf.Clamp(slipRate, -60f, 60f) * 0.15f) / 25f, -1f, 1f);
 
             float targetSpeed = PlannedSpeed();
             if (stopSeconds > 0f)

@@ -37,14 +37,16 @@ namespace ShooterMashup.Vehicles
         [Header("Tyres and steering")]
         [Tooltip("Tyre friction coefficient: grip force per unit of load (times each tyre's own grip). With the extra gravity 0.75 is about 1 g of cornering.")]
         public float grip = 0.75f;
-        [Tooltip("A sliding tyre (asked for more than its grip) grips this fraction as well until the slide dies down: what lets cars spin and drift.")]
+        [Tooltip("A tyre sliding fast (slideFullSlip or more) grips this fraction as well: what lets cars spin and drift.")]
         [Range(0.3f, 1f)] public float slideGrip = 0.75f;
         [Tooltip("How fast (m/s) a sliding wheel spins over the ground per times its grip it is driven with. More: a wheel sliding under power loses more sideways grip (power oversteer).")]
         public float wheelspinSlip = 2f;
         [Tooltip("Below this speed over the ground (m/s) a tyre never slides, so parking and crawling stay sure-footed.")]
         public float slideMinSpeed = 2f;
-        [Tooltip("A tyre asked for more than its grip gives all its grip until it actually slides this fast (m/s: sideways, spinning or skidding); only then does it let go (slideGrip). So cornering on the limit is crisp, and slides are slides.")]
+        [Tooltip("A tyre asked for more than its grip gives all its grip until it actually slides this fast (m/s: sideways, spinning or skidding); only then does it start to let go. So cornering on the limit is crisp, and slides are slides.")]
         public float slideStartSlip = 1.5f;
+        [Tooltip("Sliding faster than slideStartSlip, a tyre loses grip gradually, down to slideGrip at this speed over the ground (m/s), and gets it back the same way as the slide dies down (no snap when it catches).")]
+        public float slideFullSlip = 5f;
         [Tooltip("Fraction of a wheel's sideways sliding cancelled per physics step (0..1).")]
         [Range(0f, 1f)] public float lateralStiffness = 0.5f;
         [Tooltip("Steering angle of the frontmost wheels at low speed (degrees).")]
@@ -65,6 +67,8 @@ namespace ShooterMashup.Vehicles
         public float uprightDamping = 1.2f;
         [Tooltip("Roll stiffness: how hard the springs resist leaning (a difference in compression across an axle), as a fraction of how hard they resist bouncing. Our vehicles are about twice as wide as real ones, so their springs alone hardly let them lean; below 1 they roll more. Above 1 it's an anti-roll bar.")]
         public float rollStiffness = 0.3f;
+        [Tooltip("Damping of leaning, as a fraction of the damping that matches the roll stiffness. Below 1 the body springs back upright after a corner instead of easing back (a heavy load high up cancels much of the roll springs, which leaves them over-damped).")]
+        [Range(0f, 2f)] public float rollDamping = 0.6f;
         [Tooltip("How hard the body turns upright in the air (1/s²), so jumps land on the wheels.")]
         public float airUpright = 1.5f;
         [Tooltip("Pushes the vehicle down at speed (m/s² per (m/s)²). It adds grip, so keep it small.")]

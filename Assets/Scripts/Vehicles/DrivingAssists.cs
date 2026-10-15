@@ -8,11 +8,12 @@ namespace ShooterMashup.Vehicles
     /// (Y cycles it while driving). The vehicle (its parts and physics) stays the same; only the
     /// helpers change, so a casual player and an expert can drive the same build.
     ///
-    /// - Casual: traction control that keeps grip free for cornering (power never spoils a turn),
-    ///   ABS, strong stability control (it pulls the car out of slides), steering lock held at the
-    ///   tyres' limit, rollover assist from 20° of lean, a gentle throttle.
-    /// - Standard: traction control against wheelspin only (power can still push the back out
-    ///   in a corner), ABS, light stability control, steering lock just past the limit, rollover
+    /// - Casual: traction control that keeps most of the grip a corner needs (power rarely spoils
+    ///   a turn), ABS, firm stability control that still lets you drift (it lets a slide get
+    ///   further at low speed than at high speed, and takes the swing out of it), steering lock
+    ///   held at the tyres' limit, rollover assist from 20° of lean, a gentle throttle.
+    /// - Standard: traction control that keeps some of it (power can still push the back out in
+    ///   a corner), ABS, lighter stability control, steering lock just past the limit, rollover
     ///   assist from 30°.
     /// - Expert: no traction control, no ABS (brakes lock), no stability control, much more
     ///   steering lock at speed, no rollover assist, a sharp throttle.
@@ -25,13 +26,15 @@ namespace ShooterMashup.Vehicles
         public Level level = Level.Standard;
         [Tooltip("Traction control: a driven wheel is pushed at most this fraction past its grip (0: never spins it, -1: off).")]
         public float tractionSlack;
-        [Tooltip("Traction control also leaves the grip a tyre needs for cornering (no power understeer or oversteer).")]
-        public bool tractionKeepsCornering;
+        [Tooltip("Traction control also leaves this share of the grip a tyre needs for cornering (1: power never spoils a turn; less: power can push the back out). In a slide it never takes all the power, so a drift can be held on the throttle.")]
+        [Range(0f, 1f)] public float tractionCornering = 0.4f;
         [Tooltip("ABS: brakes never lock the wheels.")]
         public bool abs = true;
         [Tooltip("Stability control: pushes the car back towards where it's going once it slides past stabilityAngle (1/s² per degree past it). 0: off.")]
-        public float stability = 0.04f;
-        public float stabilityAngle = 10f;
+        public float stability = 0.05f;
+        public float stabilityAngle = 12f;
+        [Tooltip("Stability control also resists the slide angle growing (1/s: yaw pushed back per yaw the slide grows by), which takes the swing out of a caught slide. Never against a slide being caught. 0: off.")]
+        public float stabilityDamping = 3f;
         [Tooltip("Understeer limiter: while the steered tyres slide sideways, the lock eases off until they grip again (holding full lock gives the tightest turn the tyres allow, not a plough).")]
         public bool understeerLimiter = true;
         [Tooltip("Steering lock at speed, as a multiple of what the tyres can take.")]
@@ -46,14 +49,14 @@ namespace ShooterMashup.Vehicles
         {
             Level.Casual => new DrivingAssists
             {
-                level = level, tractionSlack = 0f, tractionKeepsCornering = true, abs = true,
-                stability = 0.12f, stabilityAngle = 6f, steerGripMargin = 0.95f,
+                level = level, tractionSlack = 0f, tractionCornering = 0.7f, abs = true,
+                stability = 0.08f, stabilityAngle = 15f, stabilityDamping = 4f, steerGripMargin = 0.95f,
                 rolloverAssistAngle = 20f, rolloverAssist = 1f, throttleRiseTime = 0.8f, steerTimeFast = 0.8f,
             },
             Level.Expert => new DrivingAssists
             {
-                level = level, tractionSlack = -1f, tractionKeepsCornering = false, abs = false,
-                stability = 0f, steerGripMargin = 1.8f, understeerLimiter = false,
+                level = level, tractionSlack = -1f, tractionCornering = 0f, abs = false,
+                stability = 0f, stabilityDamping = 0f, steerGripMargin = 1.8f, understeerLimiter = false,
                 rolloverAssist = 0f, throttleRiseTime = 0.25f, steerTimeFast = 0.4f,
             },
             _ => new DrivingAssists { level = Level.Standard },

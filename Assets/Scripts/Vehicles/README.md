@@ -8,8 +8,9 @@ engines, driven and free wheels and tyres that let go, so cars can drift and spi
 
 Rebuild the test map and press Play. A buggy stands to the right of the spawn hub, facing
 an ice sheet (tyres keep only 15% of their grip on it: try turning). Walk through the portal behind the spawn
-(or drive the road south) to the **off-road area**. West of where you arrive is a **lineup** of
-six vehicles facing the rally track, each with a sign:
+(or drive the road south) to the **off-road area**. Beside where you arrive is a **lineup** of
+nine vehicles facing the rally track, each with a sign (six to the west, three newer cars east of
+the portal):
 
 | Vehicle | Drive | Engine | Mass | Feel |
 | --- | --- | --- | --- | --- |
@@ -19,10 +20,18 @@ six vehicles facing the rally track, each with a sign:
 | Rally truck | all | 2 x V8, 640 kW | 1.9 t | absurdly fast (0-100 in 3 s), four-wheel drifts |
 | Heavy truck | 8x8 | diesel, 420 kW | 20 t (15 t of iron) | lumbering: 0-90 km/h in about 25 s |
 | Semi | 6x4 | diesel, 420 kW | 19 t with its trailer (13 t of stone) | lumbering, the trailer swings behind |
+| Muscle car | rear | V8, 320 kW | 1.9 t | brutal, a light back end: smokes its tyres, swings wide |
+| Hatchback | front | 4-cyl, 130 kW | 1.6 t | modest, pushes wide when pressed |
+| Rally car | all | V6, 200 kW | 1.6 t | short and grippy, quick to turn, drifts on the throttle |
 
 The off-road area also has a 1160 m rally loop with rollers, washboard, rocks and a table-top
 jump, where a rally truck drives up to ~150 km/h while you stand on it, and stunt tests (a crash,
 a flip and a loop) by the arrival.
+
+The portal to the right of the spawn (or the road north-east, past the ice) leads to **rolling
+hills**: a 240 m square of smooth waves up to 7 m high and 16° steep, with a lineup of buggy,
+muscle car, hatchback, rally car, rally truck and van at its south edge, to feel the cars on
+ground that isn't flat.
 
 | Input | Action |
 | --- | --- |
@@ -111,9 +120,10 @@ Riders.cs             is a player riding a vehicle?
 - **Tyres.** Each tyre works out the force that would stop it sliding sideways, plus the drive
   or brake asked of it, and gets as much as its grip allows: grip (0.75) times its load, about
   1 g of cornering. Asked for more it holds on at the limit, and only once it actually slides
-  (over 1.5 m/s: sideways, spinning or skidding) does it let go: a sliding tyre grips less (75%)
-  until the slide dies down, its force pointing along the slip, so a wheel spinning under power
-  has little sideways grip left. That's what makes the back of a rear-wheel-drive car step out
+  (over 1.5 m/s: sideways, spinning or skidding) does it start to let go: the faster it slides
+  the less it grips, down to 75% from 5 m/s, and it gets its grip back the same way as the slide
+  dies down (so a caught slide doesn't snap back the other way). A sliding tyre's force points
+  along the slip, so a wheel spinning under power has little sideways grip left. That's what makes the back of a rear-wheel-drive car step out
   under power, a front-wheel-drive one push wide, and a handbrake turn spin.
 - **Surfaces:** wheels on a surface marked `SurfaceFlags.Slick` (the players' slick flag, via
   `PmSurface`) keep only `slickGrip` (15%) of their grip: ice.
@@ -122,24 +132,35 @@ Riders.cs             is a player riding a vehicle?
 
   | | Casual | Standard | Expert |
   | --- | --- | --- | --- |
-  | Traction control | keeps grip free for cornering | stops wheelspin from drive alone | off |
+  | Traction control | no wheelspin; leaves 70% of the grip a corner needs | no wheelspin; leaves 40% | off |
   | ABS | on | on | off: brakes lock |
-  | Stability control (ESC light) | strong, past 6° of slip | light, past 10° | off |
+  | Stability control (ESC light) | firm, past 15° of slip at 70 km/h | lighter, past 12° | off |
   | Understeer limiter | on | on | off |
   | Steering lock at speed | at the tyres' limit | just past it | much freer |
   | Rollover assist | from 20° | from 30° | off |
   | Throttle / steering build-up | gentle | medium | sharp |
 
-  T toggles traction control on top of any level. The understeer limiter eases the lock off
-  while the steered tyres slide sideways, so holding full lock gives the tightest turn the
-  tyres allow instead of a plough; countersteer is always possible (lock grows by the slip angle).
+  T toggles traction control on top of any level. In a slide traction control never takes all
+  the power, so a drift can be held on the throttle. Stability control turns the car back towards
+  where it's going once it slides past its angle, and resists the slide growing (but never a
+  slide being caught): that takes the swing out of a caught slide, which would otherwise carry
+  the car into a slide the other way. Both get firmer with speed (the angle halves from 70 to
+  110 km/h, and doubles at 35 km/h), so drifting round a slow bend is easy and a slide at
+  120 km/h is caught. The understeer limiter eases the lock off while the steered tyres slide
+  sideways and the rear ones grip (pushing wide), so holding full lock gives the tightest turn
+  the tyres allow instead of a plough; it leaves the lock alone in a drift, where it's needed
+  to countersteer, and countersteer is always possible (lock grows by the slip angle).
 - **Vehicle assists** (what makes anything drive, whoever drives it):
   - springs sized per wheel from where the weight sits (also a trailer's weight on its tractor),
     so a loaded truck sits level;
   - body roll is mostly real: the springs resist leaning less than bouncing (`rollStiffness`
     0.3: our vehicles are twice as wide as real ones, so they'd hardly lean otherwise; the demo
-    designs set their own until suspension parts exist: buggy 1.2, saloon and rally truck 0.6,
-    van 0.35), and the centre of mass is only held down for very tall builds. A tall, loaded van
+    designs set their own until suspension parts exist: buggy 1.2, rally car 0.8, saloon,
+    hatchback and rally truck 0.6, muscle car 0.45, van 0.35), and the centre of mass is only held
+    down for very tall builds. The dampers follow the roll springs but damp leaning less than
+    bouncing (`rollDamping` 0.6), so the body springs back upright after a corner instead of
+    easing back: a load high up (the heavy truck's iron) cancels much of the roll springs, which
+    left them over-damped (it took 1.7 s to come upright; now 0.8 s). A tall, loaded van
     leans hard and lifts a wheel in a fast corner. Each wheel's roll spring pairs with the wheel
     across the same axle (the nearest one on the other side of the centre of mass, within half a
     metre along); an unpaired wheel just has its own spring;
@@ -173,17 +194,15 @@ Riders.cs             is a player riding a vehicle?
   body dynamic again. Putting a vehicle on it rests the vehicle's lowest point (usually the
   tyres at full droop) on the platform; adding parts that hang lower raises it.
 
-## Backlog (next session, from the owner's test drive on 2026-10-15)
+## Backlog
 
-- **Heavy truck's lean returns slowly.** After a corner it rolls back upright too lazily, which
-  feels off (look at roll damping and the soft roll stiffness on heavy, tall builds).
-- **Casual is over-tuned.** It should still allow drifting (stability control and the
-  cornering-aware traction control are probably too strong).
-- **Standard makes driving fast too hard.** It's easy to lose control, especially when power
-  spins the wheels while already going fast, and once drifting it's hard to get out of it.
-  Most noticeable on the buggy; the rally truck feels much better by comparison.
-- **More test cars:** a RWD muscle car, a FWD hatchback and a 4x4 rally car.
-- **Rolling hills** to test the feel in more representative terrain than the flat floor.
+From the owner's test drive on 2026-10-15, done the same day and waiting to be tried at the wheel:
+the heavy truck's lean springs back (roll damping), Casual allows drifting again and Standard
+is calmer at speed (tyres that let go and regrip gradually, traction control that leaves some
+cornering grip, stability control that damps the swing and firms up with speed, an understeer
+limiter that leaves countersteer alone), three new test cars (muscle car, hatchback, rally car)
+and the rolling hills.
+
 - Still open: gearbox as a part (ratios) with automatic or manual shifting as a player setting
   (proposed, not agreed yet), and builder parts (tyres, suspension and anti-roll bars,
   differentials, brakes, wings, ballast).

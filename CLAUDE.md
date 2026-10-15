@@ -183,15 +183,27 @@ Agreed with the owner:
   assist and throttle/steering build-up. The vehicle's physics and parts don't change. Steering
   geometry: every wheel follows its own circle about a pivot between the rear (non-steering)
   wheels (Ackermann; on multi-axle trucks the rear axles steer slightly), up to 38°. Tyres hold
-  full grip at the limit and only "let go" (75%) once they slide over 1.5 m/s. Drive is shared
+  full grip at the limit and only "let go" once they slide over 1.5 m/s (down to 75% at 5 m/s,
+  regripping the same way). Drive is shared
   by wheel load. The owner liked the trucks' lean but found it too much on the buggy: until
   suspension parts exist the demo designs set their own `rollStiffness`. Gearbox: the owner sees
   manual vs auto as a build decision or a player mode (not built yet).
+- **Assist tuning round 2 (2026-10-15, from the owner's test drive; to be tried):** Casual must
+  still allow drifting, Standard must make fast driving manageable (it was easy to lose the
+  buggy when power spun the wheels at speed, and hard to get out of a drift). Done with: tyres
+  that lose and regain grip gradually with slip speed (no snap when a slide is caught), traction
+  control that leaves a share of the cornering grip (`tractionCornering`: casual 0.7, standard
+  0.4) but never all the power in a slide, stability control that also damps the slide growing
+  (`stabilityDamping`; this stopped the pendulum after a caught slide) and firms up with speed,
+  and an understeer limiter that only acts in understeer (it used to cut countersteer lock in
+  drifts). Heavy truck's slow lean recovery: dampers now follow the roll springs with
+  `rollDamping` 0.6 (1.7 s to upright, now 0.8 s). New test cars: muscle car (RWD V8), hatchback
+  (FWD 4-cyl), rally car (AWD V6). Rolling hills area added.
 
 ## To-do / open questions
 
-- **Vehicle backlog (2026-10-15):** see "Backlog" in `Assets/Scripts/Vehicles/README.md` (heavy
-  truck lean recovery, assist tuning for casual and standard, more test cars, rolling hills).
+- **Vehicles:** the 2026-10-15 backlog is done and waits for the owner's test drive (see
+  "Backlog" in `Assets/Scripts/Vehicles/README.md`); still open: gearbox and builder parts.
 
 - **Open building topics (raised 2026-10-12):** stair width (1 and 3 m wide stairs now, still
   being tried out), ladders (wood ladder pieces added 2026-10-12, more to try), and roofs (45°, 27° and 63° sets with corners, caps and
@@ -267,17 +279,21 @@ Agreed with the owner:
   `.meta` files differ from the copy's old scene.
 - Test map: menu **ShooterMashup > Build Movement Test Map** regenerates
   `Assets/Scenes/MovementTest.unity`. You spawn at a hub at the origin with a buggy facing a 60 m
-  ice sheet east of it (slick for players and vehicles: wheels get `slickGrip`, 15%), three portals (walk through; each area has one back) and roads
-  to three areas, each built in its own space: **character tests** (z +140, arriving in the
+  ice sheet east of it (slick for players and vehicles: wheels get `slickGrip`, 15%), four portals (walk through; each area has one back) and roads
+  to four areas, each built in its own space: **character tests** (z +140, arriving in the
   middle with groups around you: stairs, ramps and crates; tunnels and lean corner; ladder and
   fall towers; water and slime tanks and slick floor; moving platforms: elevator, slider,
   carousel), **building** (x -190: the showcase, diggable dirt, bridge cliffs; the StructureManager stays at the world origin and the
   showcase gets world corners), and **off-road** (z -200, behind the spawn: a 1160 m loop with two
   400 m bumpy straights; a rally truck on big wheels drives it only while someone
-  stands on it, ~150 km/h on the north straight; a lineup of six drivable demo vehicles west of
+  stands on it, ~150 km/h on the north straight; a lineup of nine drivable demo vehicles beside
   the arrival, facing the track; and
   stunt tests by the arrival, each a cab-less flatbed on big wheels that runs once you stand on it
   and resets itself (`StuntDriver`): a crash into a concrete block narrower than its wheel track
   (90 km/h, throws you over it), a flip off a kicker under one side (90 km/h, self-levelling off)
   and a 28 m teardrop loop that shifts 7 m sideways so the exit clears the entry (108 km/h, stiff
-  springs; the truck makes it round, the rider doesn't)).
+  springs; the truck makes it round, the rider doesn't)), and **rolling hills** (x +110..350,
+  z +110..350, north-east past the ice: a 240 m heightfield mesh of three long waves, up to 7 m
+  and 16°, with a lineup of six cars at its south edge). Scripted test drives on the flat floor
+  east of the hub (x 130..350) must start north of z -40 (the loop test's run-up crosses there)
+  and keep clear of the hills lineup (x 110..150, z 100).

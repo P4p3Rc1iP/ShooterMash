@@ -30,12 +30,14 @@ namespace ShooterMashup.Vehicles
             public float steerFactor;     // 1 for the frontmost wheels, 0 for the rear half
             public Transform tyre;
             public float compression;     // 0 full droop .. 1 full bump
+            public float compressionSpeed;  // how fast it compresses (m/s)
             public float steerAngle;
             public float spin;            // degrees, for the tyre
             public float spinSign;        // +1 when the axle points right of the rolling direction
             public bool grounded;
             public RaycastHit hit;        // this step's suspension ray
-            public bool sliding;          // the tyre is sliding: it grips less until it stops
+            public bool sliding;          // the tyre is sliding: it grips less, the faster it slides
+            public float gripLeft = 1f;   // the fraction of its grip it has left (1 unless sliding)
             public bool spinning, locked, slick; // why it slides, and on what
             public float slip;            // how fast the tyre slides over the ground (m/s)
             public float treadSpeed;      // how fast the tread turns (m/s): the ground speed plus any wheelspin
@@ -61,6 +63,7 @@ namespace ShooterMashup.Vehicles
         float frontalArea = 4f;           // across times height (m²), for air drag
         float throttle, steerInput, steer;
         float steerScale = 1f;            // the understeer limiter's cut
+        float lastSlipAngle, slipRate;    // for stability control: last step's slip angle, and how fast it changes (smoothed, degrees/s)
         bool handbrake;
         float power, pull;               // the engines' (W, N)
         bool hasKingpin, hasFifthWheel;
@@ -714,12 +717,16 @@ namespace ShooterMashup.Vehicles
                 maxSteer = Mathf.Min(maxSteer + slipAngle, t.maxSteer);  // the grip limit, measured from where it's going
             }
             SteerLock = maxSteer;
-            // Understeer limiter (assist): while the steered tyres slide sideways, ease the lock off
-            // until they grip again; let it back as they do.
-            bool frontSliding = false;
+            // Understeer limiter (assist): while the steered tyres slide sideways and the rear ones
+            // grip (pushing wide, not a drift: there the lock is needed to countersteer), ease the
+            // lock off until they grip again; let it back as they do.
+            bool frontSliding = false, rearSliding = false;
             foreach (Wheel w in wheels)
-                if (w.steerFactor > 0f && w.sliding && !w.spinning && !w.locked)
-                    frontSliding = true;
+            {
+                if (w.steerFactor > 0f && w.sliding && !w.spinning && !w.locked) frontSliding = true;
+                if (w.steerFactor <= 0f && w.sliding) rearSliding = true;
+            }
+            frontSliding &= !rearSliding;
             steerScale = a.understeerLimiter
                 ? Mathf.MoveTowards(steerScale, frontSliding ? 0.5f : 1f, (frontSliding ? 1.5f : 0.8f) * dt)
                 : 1f;
@@ -763,8 +770,10 @@ namespace ShooterMashup.Vehicles
                 if (!w.grounded)
                 {
                     w.sliding = w.spinning = w.locked = false;
+                    w.gripLeft = 1f;
                     w.slip = 0f;
                     w.compression = Mathf.MoveTowards(w.compression, 0f, dt * 4f);
+                    w.compressionSpeed = 0f;
                     // In the air a driven wheel spins up on the throttle, and otherwise slowly runs down.
                     float free = w.spec.driven && controlled && throttleNow != 0f && !Parked ? Mathf.Sign(throttleNow) * TopSpeed
                         : Parked ? 0f : w.treadSpeed * 0.98f;
@@ -785,11 +794,15 @@ namespace ShooterMashup.Vehicles
                 float compression = Mathf.Clamp01(raw);
                 float velocity = (compression - w.compression) * travel / dt;
                 w.compression = compression;
+                w.compressionSpeed = velocity;
                 float load = Mathf.Max(0f, k * compression * travel + c * velocity);
                 // Roll stiffness: the springs resist the difference in compression across an axle
                 // rollStiffness times as much as they resist both compressing (more: an anti-roll bar).
+                // The dampers follow, so leaning is damped as much as bouncing (softer roll springs
+                // with the full damping would ease back upright slowly instead of springing back).
                 if (w.partner != null)
-                    load = Mathf.Max(0f, load + (t.rollStiffness - 1f) * k * travel * (compression - w.partner.compression) / 2f);
+                    load = Mathf.Max(0f, load + (t.rollStiffness - 1f) * k * travel * (compression - w.partner.compression) / 2f
+                        + (Mathf.Sqrt(t.rollStiffness) * t.rollDamping - 1f) * c * (velocity - w.partner.compressionSpeed) / 2f);
                 if (raw > 1f)
                     load += k * (raw - 1f) * travel * 4f;              // bump stop
                 body.AddForceAtPosition(up * load, hit.point);
@@ -819,9 +832,11 @@ namespace ShooterMashup.Vehicles
                     // Assist (traction control): a driven wheel is never pushed more than a bit past its grip.
                     float push = w.spec.driven && drivenOnGround > 0
                         ? drive * w.driveFactor * (drivenLoad > 1f ? w.load / drivenLoad : 1f / drivenOnGround) : 0f;
-                    float most = capacity * (w.sliding ? t.slideGrip : 1f) * (1f + a.tractionSlack);
-                    if (a.tractionKeepsCornering)
-                        most = Mathf.Sqrt(Mathf.Max(0f, most * most - lateral * lateral));   // leaves the grip the corner needs
+                    float most = capacity * w.gripLeft * (1f + a.tractionSlack);
+                    // Leave part of the grip the corner needs (all of it at most: in a slide some
+                    // power still gets through, so a drift can be held on the throttle).
+                    float corner = Mathf.Min(Mathf.Abs(lateral), most) * a.tractionCornering;
+                    most = Mathf.Sqrt(Mathf.Max(0f, most * most - corner * corner));
                     if (a.tractionSlack >= 0f && Mathf.Abs(push) > most)
                     {
                         push = Mathf.Clamp(push, -most, most);
@@ -841,13 +856,13 @@ namespace ShooterMashup.Vehicles
                 bool lockedNow = Parked || Braking && !a.abs || (handbrake && controlled && rear);
                 float slipNow = Mathf.Max(Mathf.Abs(vSide), lockedNow ? Mathf.Abs(vRoll)
                     : Mathf.Max(0f, Mathf.Abs(longitudinal) / Mathf.Max(capacity, 1f) - 1f) * 10f);
-                if (slow)
-                    w.sliding = false;                                         // parking and crawling stay sure-footed
-                else if (asked > capacity && slipNow > t.slideStartSlip)
-                    w.sliding = true;                                          // at the limit it grips; past it, it lets go
-                else if (asked < capacity * t.slideGrip || slipNow < t.slideStartSlip * 0.5f)
-                    w.sliding = false;
-                float available = w.sliding ? capacity * t.slideGrip : capacity;
+                // At the limit it grips; once it slides it lets go, the faster it slides the more (down
+                // to slideGrip), and it gets its grip back the same way as the slide dies down, so a
+                // slide can be caught without the grip snapping back. Parking and crawling stay sure-footed.
+                float letGo = slow ? 0f : Mathf.Clamp01((slipNow - t.slideStartSlip) / Mathf.Max(t.slideFullSlip - t.slideStartSlip, 0.01f));
+                float available = capacity * Mathf.Lerp(1f, t.slideGrip, letGo);
+                w.sliding = !slow && asked > available && slipNow > t.slideStartSlip;
+                w.gripLeft = Mathf.Lerp(1f, t.slideGrip, letGo);
                 Vector2 force = demand;
                 bool locked = lockedNow;
                 float spinUp = 0f;   // how much faster than the ground the tread turns (wheelspin)
@@ -915,12 +930,31 @@ namespace ShooterMashup.Vehicles
             SlipAngle = flatVelocity.sqrMagnitude > 4f ? Vector3.SignedAngle(Mathf.Sign(speed) * fwdWorld, flatVelocity, up) : 0f;
             // Stability control: once the car slides further than stabilityAngle from where it's going,
             // turn it back towards its path (real ones brake single wheels; this is the arcade version).
+            // It also resists the slide growing (either way, but never a slide being caught), which
+            // takes the swing out of a caught slide: otherwise the yaw that catching it builds up
+            // carries the car into a slide the other way.
             StabilityActive = false;
-            if (a.stability > 0f && WheelsOnGround > 0 && Mathf.Abs(speed) > 5f && Mathf.Abs(SlipAngle) > a.stabilityAngle)
+            // Smoothed over about 0.15 s: over bumps the slip angle jitters from step to step, and
+            // damping that would kick the car about.
+            slipRate = Mathf.Lerp(slipRate, (SlipAngle - lastSlipAngle) / dt, Mathf.Clamp01(dt / 0.15f));
+            lastSlipAngle = SlipAngle;
+            // Both get stronger with speed: drifting round a bend at 50 km/h is fun, at 120 it's a crash.
+            // Only with most wheels on the ground: in the air or over big bumps the slip angle swings
+            // about without the tyres doing it, and turning the body then lands it rotating.
+            if (WheelsOnGround * 4 >= n * 3 && Mathf.Abs(speed) > 5f)
             {
-                float excess = Mathf.Abs(SlipAngle) - a.stabilityAngle;
-                body.AddTorque(up * (Mathf.Sign(SlipAngle) * excess * a.stability), ForceMode.Acceleration);
-                StabilityActive = true;
+                float yaw = 0f;
+                float bySpeed = Mathf.Clamp(Mathf.Abs(speed) / 20f, 0.5f, 1.5f);
+                float allowed = a.stabilityAngle / bySpeed;
+                if (a.stability > 0f && Mathf.Abs(SlipAngle) > allowed)
+                    yaw += Mathf.Sign(SlipAngle) * (Mathf.Abs(SlipAngle) - allowed) * a.stability * bySpeed;
+                if (a.stabilityDamping > 0f && Mathf.Abs(SlipAngle) > 2f)
+                    yaw += Mathf.Clamp(slipRate, -30f, 30f) * Mathf.Deg2Rad * a.stabilityDamping * bySpeed;   // as fast as a slide being caught swings
+                if (yaw != 0f)
+                {
+                    body.AddTorque(up * yaw, ForceMode.Acceleration);
+                    StabilityActive = true;
+                }
             }
             if (WheelsOnGround > 0)
             {

@@ -17,6 +17,9 @@ namespace ShooterMashup.Vehicles
     /// - Rally truck: a flatbed on big wheels with two V8s and all-wheel drive.
     /// - Heavy truck: 8x8 on huge wheels with a diesel, carrying 15 t of iron beams.
     /// - Semi: a 6x4 tractor with a diesel, towing a trailer loaded with stone.
+    /// - Muscle car: long, a V8 in the nose, rear-wheel drive: lots of power, a light back end.
+    /// - Hatchback: short and light on small wheels, a 4-cyl, front-wheel drive.
+    /// - Rally car: short, a V6, all-wheel drive on 1 m wheels: grippy and quick to turn.
     /// - Truck and stunt truck: flatbeds for riding on (the stunt one has no cab).
     /// </summary>
     public class VehicleShowcase : MonoBehaviour
@@ -28,7 +31,7 @@ namespace ShooterMashup.Vehicles
         public Vector3 buggyPosition = new Vector3(64f, 0f, 14f);
         public float buggyYaw;
 
-        public enum Design { Buggy, Truck, RallyTruck, StuntTruck, Saloon, Van, HeavyTruck, Semi }
+        public enum Design { Buggy, Truck, RallyTruck, StuntTruck, Saloon, Van, HeavyTruck, Semi, MuscleCar, Hatchback, RallyCar }
         [Tooltip("Which vehicle to build.")]
         public Design design = Design.Buggy;
         [Tooltip("Drive it in circles while nobody sits in it (to practise riding on it).")]
@@ -112,6 +115,9 @@ namespace ShooterMashup.Vehicles
             Design.Saloon => 0.6f,
             Design.RallyTruck => 0.6f,
             Design.Van => 0.35f,
+            Design.MuscleCar => 0.45f,
+            Design.Hatchback => 0.6f,
+            Design.RallyCar => 0.8f,
             _ => new VehicleTuning().rollStiffness,
         };
 
@@ -124,6 +130,9 @@ namespace ShooterMashup.Vehicles
             Design.Van => VanPlan(),
             Design.HeavyTruck => HeavyTruckPlan(),
             Design.Semi => TractorPlan(),
+            Design.MuscleCar => MuscleCarPlan(),
+            Design.Hatchback => HatchbackPlan(),
+            Design.RallyCar => RallyCarPlan(),
             _ => BuggyPlan(),
         };
 
@@ -275,6 +284,76 @@ namespace ShooterMashup.Vehicles
             p.Place("Floor 3x3", new Vector3(0, d + 2f, 1.5f));
             foreach (float x in new[] { -1.385f, 1.385f })
                 p.Place("Pillar 1 m", new Vector3(x, d + 1f, 2.885f));
+            return p.list;
+        }
+
+        /// <summary>
+        /// A muscle car, 6 m long on 1 m wheels (4.5 m wheelbase): a long nose with a V8 in it, a
+        /// low cabin set back, a trunk. Rear-wheel drive: about 1.9 t and 320 kW, with little
+        /// weight over the driven wheels.
+        /// </summary>
+        public static List<Placement> MuscleCarPlan()
+        {
+            var p = new Planner();
+            float d = Planner.Deck;
+            p.Axle(2.5f, "Wheel (free)");
+            p.Deck1(2.5f);
+            p.Deck1(1.5f);
+            p.Deck3(-0.5f);
+            p.Deck1(-2.5f);
+            p.Axle(-2f, "Wheel");
+            p.Place("Engine V8", new Vector3(0, d, 2f));
+            p.Place("Driver seat", new Vector3(-0.6f, d, -0.6f));
+            p.Sides(d, -1.5f, -0.5f, 0.5f);
+            foreach (float x in new[] { -1.385f, 1.385f })
+            foreach (float z in new[] { -1.5f, 0.5f })
+                p.Place("Pillar 1 m", new Vector3(x, d + 1f, z));
+            p.Place("Floor 3x3", new Vector3(0, d + 2f, -0.5f));             // the roof
+            return p.list;
+        }
+
+        /// <summary>
+        /// A hatchback, 4 m long on small road wheels (3 m wheelbase): a 4-cyl in the nose, a cabin
+        /// with a roof and a back wall. Front-wheel drive: about 1.6 t and 130 kW.
+        /// </summary>
+        public static List<Placement> HatchbackPlan()
+        {
+            var p = new Planner();
+            float d = Planner.Deck;
+            p.Axle(2f, "Small wheel");
+            p.Deck1(2f);
+            p.Deck3(0f);
+            p.Axle(-1f, "Small wheel (free)");
+            p.Place("Engine 4-cyl", new Vector3(0, d, 2f));
+            p.Place("Driver seat", new Vector3(-0.6f, d, 0.4f));
+            p.Sides(d, -1f, 0f, 1f);
+            p.Across(d, -1.4f);                                                // the hatch
+            foreach (float x in new[] { -1.385f, 1.385f })
+            foreach (float z in new[] { -1f, 1f })
+                p.Place("Pillar 1 m", new Vector3(x, d + 1f, z));
+            p.Place("Floor 3x3", new Vector3(0, d + 2f, 0));                  // the roof
+            return p.list;
+        }
+
+        /// <summary>
+        /// A rally car, 4 m long on 1 m wheels (3 m wheelbase), all driven: a V6 in the nose, a
+        /// cabin with a roof. About 1.6 t and 200 kW: grippy, and quick to turn.
+        /// </summary>
+        public static List<Placement> RallyCarPlan()
+        {
+            var p = new Planner();
+            float d = Planner.Deck;
+            p.Axle(1.5f, "Wheel");
+            foreach (float z in new[] { 1.5f, 0.5f, -0.5f, -1.5f })
+                p.Deck1(z);
+            p.Axle(-1.5f, "Wheel");
+            p.Place("Engine V6", new Vector3(0, d, 1.5f));
+            p.Place("Driver seat", new Vector3(-0.6f, d, -0.2f));
+            p.Sides(d, -1.5f, -0.5f, 0.5f);
+            foreach (float x in new[] { -1.385f, 1.385f })
+            foreach (float z in new[] { -1f, 1f })
+                p.Place("Pillar 1 m", new Vector3(x, d + 1f, z));
+            p.Place("Floor 3x3", new Vector3(0, d + 2f, 0));                  // the roof
             return p.list;
         }
 
