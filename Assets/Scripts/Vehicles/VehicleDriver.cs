@@ -22,6 +22,8 @@ namespace ShooterMashup.Vehicles
 
         [Header("Assists (a player setting: Y cycles casual, standard, expert while driving)")]
         public DrivingAssists.Level assistLevel = DrivingAssists.Level.Standard;
+        [Tooltip("Change gear by hand (E up, Q down) instead of automatically; G toggles it while driving. Remembered.")]
+        public bool manualGears;
 
         // How fast the throttle opens and the steering turns in at speed come with the assists.
         [Header("Keyboard (the keys are on or off, so the controls build up)")]
@@ -70,10 +72,12 @@ namespace ShooterMashup.Vehicles
         float throttleNow, steerNow;          // the shaped keyboard controls
         DrivingAssists assists;
         const string AssistsKey = "ShooterMash.DrivingAssists";
+        const string GearsKey = "ShooterMash.ManualGears";
         float baseFov, shakeAmount, tilt;    // the camera's feel
         Vector3 lastVelocity;
         float joltSinceFrame;
         Vector3 camPosition, camVelocity;
+        float camReach = -1f;                // how far back the follow camera may be (eases in front of terrain, back out slowly)
         bool aimingAtSeat;
         GUIStyle style;
 
@@ -88,6 +92,7 @@ namespace ShooterMashup.Vehicles
             // The assist level is remembered between sessions (it's the player's, not the vehicle's).
             assistLevel = (DrivingAssists.Level)Mathf.Clamp(PlayerPrefs.GetInt(AssistsKey, (int)assistLevel), 0, 2);
             assists = DrivingAssists.For(assistLevel);
+            manualGears = PlayerPrefs.GetInt(GearsKey, manualGears ? 1 : 0) != 0;
         }
 
         void Update()
@@ -133,6 +138,18 @@ namespace ShooterMashup.Vehicles
             }
             if (kb.tKey.wasPressedThisFrame)
                 assists.tractionSlack = assists.tractionSlack < 0f ? 0f : -1f;
+
+            // Gears: G toggles automatic / manual (remembered, like the assists); by hand E shifts up, Q down.
+            if (kb.gKey.wasPressedThisFrame)
+            {
+                manualGears = !manualGears;
+                Vehicle.Revs.Manual = manualGears;
+                PlayerPrefs.SetInt(GearsKey, manualGears ? 1 : 0);
+            }
+            if (manualGears && kb.eKey.wasPressedThisFrame)
+                Vehicle.Revs.ShiftUp();
+            if (manualGears && kb.qKey.wasPressedThisFrame)
+                Vehicle.Revs.ShiftDown();
 
             if (kb.vKey.wasPressedThisFrame)
             {
@@ -221,6 +238,7 @@ namespace ShooterMashup.Vehicles
             Vehicle = v;
             v.Driver = this;
             v.Assists = assists;
+            v.Revs.Manual = manualGears;
             if (buildTool != null) { buildTool.Unequip(); buildTool.enabled = false; }
             if (liftTool != null) { liftTool.Unequip(); liftTool.enabled = false; }
             motor.enabled = false;
@@ -248,6 +266,7 @@ namespace ShooterMashup.Vehicles
                 v.SetControls(0f, 0f, false);
                 v.Driver = null;
                 v.Assists = null;
+                v.Revs.Manual = false;              // whoever drives it next (an autopilot) shifts automatically
                 feet = ExitSpot(v);
                 Vector3 f = v.transform.TransformDirection(v.Forward);
                 yaw = Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
@@ -349,7 +368,17 @@ namespace ShooterMashup.Vehicles
                     float distance = Mathf.Max(followDistance, size * 1.8f);
                     Vector3 desired = target - heading * Vector3.forward * distance + Vector3.up * followHeight;
                     camPosition = snap ? desired : Vector3.SmoothDamp(camPosition, desired, ref camVelocity, followLag);
-                    position = Unblocked(target, camPosition);
+                    // Something between the camera and the vehicle (a crest, a wall): ease in front of
+                    // it quickly and back out slowly, rather than popping in and out as it comes and goes.
+                    Vector3 behind = camPosition - target;
+                    float wanted = Vector3.Distance(target, Unblocked(target, camPosition));
+                    if (snap || camReach < 0f)
+                        camReach = wanted;
+                    else if (wanted < camReach)
+                        camReach = Mathf.Lerp(camReach, wanted, 1f - Mathf.Exp(-25f * Time.deltaTime));
+                    else
+                        camReach = Mathf.MoveTowards(camReach, wanted, 4f * Time.deltaTime);
+                    position = target + behind.normalized * Mathf.Min(camReach, behind.magnitude);
                     rotation = Quaternion.LookRotation(target - position);
                     break;
                 }
@@ -385,7 +414,8 @@ namespace ShooterMashup.Vehicles
                 shake = new Vector3(Mathf.PerlinNoise(t, 0.3f) - 0.5f, Mathf.PerlinNoise(0.7f, t) - 0.5f, 0f) * shakeAmount;
             }
 
-            float wanted = Mathf.Clamp(-Vehicle.SlipAngle * slideTilt, -maxTilt, maxTilt);
+            // Slow, the slip angle swings about (turning on the spot, rolling backwards): no tilt there.
+            float wanted = Mathf.Clamp(-Vehicle.SlipAngle * slideTilt, -maxTilt, maxTilt) * Mathf.Clamp01((speed - 3f) / 6f);
             tilt = Mathf.Lerp(tilt, wanted, 1f - Mathf.Exp(-4f * dt));
             return Quaternion.Euler(0f, 0f, tilt);
         }
@@ -430,7 +460,7 @@ namespace ShooterMashup.Vehicles
                 : Vehicle.WheelCount == 0 ? "  <color=#ffd966>(no wheels)</color>" : "";
             string text =
                 $"<b>{Vehicle.ForwardSpeed * 3.6f:0} km/h</b>   {Vehicle.Mass:0} kg   wheels on the ground {Vehicle.WheelsOnGround}/{Vehicle.WheelCount}{state}\n" +
-                $"<color=#aaa>W/S throttle and brake, A/D steer, Space handbrake, Y assists ({assists.level}), T traction control, V camera ({cameraMode}), F get out</color>";
+                $"<color=#aaa>W/S throttle and brake, A/D steer, Space handbrake, Y assists ({assists.level}), T traction control, G gears ({(manualGears ? "manual: E up, Q down" : "auto")}), V camera ({cameraMode}), F get out</color>";
             GUI.Label(new Rect(0, Screen.height - 120, Screen.width, 60), text, style);
             if (Vehicle.Lift == null && Vehicle.WheelCount > 0)
                 VehicleHud.Draw(Vehicle);

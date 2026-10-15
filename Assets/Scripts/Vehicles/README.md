@@ -17,12 +17,16 @@ the portal):
 | Buggy | rear | V6, 200 kW | 0.6 t | fast and loose: the back steps out under power, drifts |
 | Saloon | front | V6, 200 kW | 1.6 t | quick, understeers, hard to unsettle |
 | Van | rear | V8, 320 kW | 3.7 t | heavy, stable unless provoked |
-| Rally truck | all | 2 x V8, 640 kW | 1.9 t | absurdly fast (0-100 in 3 s), four-wheel drifts |
-| Heavy truck | 8x8 | diesel, 420 kW | 20 t (15 t of iron) | lumbering: 0-90 km/h in about 25 s |
+| Rally truck | all | 2 x V8, 640 kW | 2 t | absurdly fast (0-100 in 3.7 s), four-wheel drifts |
+| Heavy truck | 8x8 | diesel, 420 kW | 20 t (15 t of iron) | lumbering: 0-90 km/h in about 20 s |
 | Semi | 6x4 | diesel, 420 kW | 19 t with its trailer (13 t of stone) | lumbering, the trailer swings behind |
-| Muscle car | rear | V8, 320 kW | 1.9 t | brutal, a light back end: smokes its tyres, swings wide |
-| Hatchback | front | 4-cyl, 130 kW | 1.6 t | modest, pushes wide when pressed |
-| Rally car | all | V6, 200 kW | 1.6 t | short and grippy, quick to turn, drifts on the throttle |
+| Muscle car | rear | V8, 320 kW, long gearbox | 2 t | brutal, a light back end: smokes its tyres, swings wide |
+| Hatchback | front | 4-cyl, 130 kW | 1.6 t | modest (0-100 in 16 s), pushes wide when pressed |
+| Rally car | all | V6, 200 kW, close-ratio gearbox | 1.7 t | short and grippy, quick to turn, drifts on the throttle |
+
+The buggy (heavy anti-roll bars), saloon, hatchback, rally car and rally truck (light bars front
+and rear) and the muscle car (a light bar at the front only) show off the anti-roll bars; the van
+and the trucks have none, so they lean.
 
 The off-road area also has a 1160 m rally loop with rollers, washboard, rocks and a table-top
 jump, where a rally truck drives up to ~150 km/h while you stand on it, and stunt tests (a crash,
@@ -41,6 +45,8 @@ ground that isn't flat.
 | Space | handbrake (locks the rear wheels: they slide) |
 | Y | driving assists: casual → standard → expert |
 | T | traction control on / off (off: the engine can spin the wheels: burnouts, power slides) |
+| G | gears: automatic ↔ manual (remembered) |
+| E / Q | manual gears: shift up / down (at the redline the limiter cuts in; lugging a tall gear has no pull) |
 | F5 | telemetry overlay (for tuning) |
 | V | camera: follow (default) → first person → free orbit (scroll zooms) |
 | L | lift tool |
@@ -64,8 +70,19 @@ parts (in every material tab; their mass is their own):
   (2 m, trucks), each **driven** (the engines turn it) or **free** (it only rolls). Snap one to
   a beam's side or the end of an axle beam; turn it 180° for the other side. Driven rear wheels
   and free fronts make a rear-wheel-drive car, and so on.
-- **Engines:** 4-cyl (130 kW), V6 (200 kW), V8 (320 kW) and diesel (420 kW, huge pull, 108 km/h
-  top). Engines add up. Without one a vehicle still drives, as before engines existed.
+- **Engines:** 4-cyl (130 kW, 5 gears to 162 km/h), V6 (200 kW, 5 gears to 187 km/h), V8
+  (320 kW, 6 gears to 216 km/h) and diesel (420 kW, huge pull, 8 gears to 108 km/h). Engines add
+  up. Without one a vehicle still drives, as before engines existed.
+- **Gearboxes** replace the engine's own ratios: **close-ratio** (6 gears, top speed x0.8, pulls
+  harder, quick shifts), **long** (6 gears, x1.2, pulls less) and **crawler** (8 gears, x0.6,
+  pulls hardest, slow shifts: trucks). Only the first one on a vehicle counts. Whether the gears
+  change by themselves is the driver's setting (G), not the part's.
+- **Anti-roll bars** (light: +0.3 roll stiffness, heavy: +0.9) stiffen the axle they're built by
+  (within 1.5 m along the vehicle) against leaning. Where they go sets the balance: a bar at the
+  front makes the car push wide, at the back it turns in (and steps out sooner).
+- **Wing:** 2.4 m across on two struts; pushes down where it's built, 2500 N at 108 km/h (with
+  the square of the speed), and drags a little. At the back it plants the rear at speed.
+- **Ballast 1x1:** a 1 x 0.25 x 1 m block of 500 kg, to put weight where you want it.
 - **Driver seat:** it faces the way the vehicle drives; it sits on top of a beam or a floor.
 - **Fifth wheel and kingpin:** a fifth wheel on a tractor's deck, a kingpin under a trailer's
   front. Back the tractor under the trailer and they couple when they come within 0.4 m.
@@ -80,7 +97,7 @@ VehicleTuning.cs      every driving number, with tooltips
 Lift.cs               the lift: a platform; holds one vehicle frozen; builds new vehicles
 LiftTool.cs           the player's lift tool (L)
 VehicleDriver.cs      sitting, driving controls and the three cameras
-EngineRevs.cs         revs and an automatic gearbox, for show (rev counter, engine sound)
+EngineRevs.cs         the drivetrain: revs, power curve, gears (automatic or manual), the drive force
 VehicleEffects.cs     tyre smoke where tyres slide; SkidMarks.cs: the marks they leave
 VehicleAudio.cs       engine, tyre squeal and impact sounds, synthesised at start (no sound files)
 VehicleHud.cs         the driver's gauges: speed, gear, rev bar, TC light, what each wheel is doing
@@ -104,12 +121,22 @@ Riders.cs             is a player riding a vehicle?
   counts as grounded: anything connected to it holds, anything cut off falls off (vanishes,
   like collapsed building pieces). The first piece must rest on the lift.
 - **Mass** is each piece's volume times its material's density (wood 500, stone 2400, iron
-  7800, scrap 200 kg/m³); wheels and engines have their own. Inertia comes from the pieces' boxes.
+  7800, scrap 200 kg/m³); wheels and vehicle parts (engines, gearboxes, bars, wings, ballast)
+  have their own. Inertia comes from the pieces' boxes.
 - **Engines** drive the driven wheels on the ground, each by how hard it presses on the ground
-  (the rear pulling away, the outside in a corner): with up to their pull at low speed (low
-  gears), above that with their power (force = power / speed), up to their top speed, where a
-  limiter cuts in. Air drag comes from the frontal area, so light fast cars are held back at
-  speed and heavy trucks hardly at all; tyres have rolling resistance.
+  (the rear pulling away, the outside in a corner), through real gears (`EngineRevs`). In each
+  gear the revs follow the speed, and the engine's power depends on the revs: the most at 90% of
+  the redline, a little less at it, much less low down (`PowerCurve`). So the force at the wheels
+  is power x curve / speed, at most the engine's pull (more with a shorter first gear), with a
+  dip after each shift and no drive during it (0.3 s, or the gearbox's). Pulling away in first,
+  the clutch slips; in a tall gear from a crawl it lugs with little pull; past the redline the
+  limiter cuts in (in top gear that's the top speed). The ratios: the engine's own (its gears up
+  to its top speed, each gear reaching (gear/gears)^0.85 of it) or a gearbox part's. The
+  automatic shifts up at 97% of the redline and down when the revs fall below half (40% off the
+  throttle); manual stays put. Reverse is always automatic, with a low gear up to
+  `reverseSpeed`. Air drag comes from the frontal area, so light fast cars are held back at
+  speed and heavy trucks hardly at all; tyres have rolling resistance. Wings push down (and
+  drag) at their own position with the square of the speed.
 - **Wheels** are raycast suspension, no joints: a spring and damper per wheel, sized to the
   weight that wheel carries (sitting 45% into its travel). Forward is where the seat faces.
 - **Steering geometry.** The vehicle turns about a point between its rear (non-steering)
@@ -142,11 +169,13 @@ Riders.cs             is a player riding a vehicle?
 
   T toggles traction control on top of any level. In a slide traction control never takes all
   the power, so a drift can be held on the throttle. Stability control turns the car back towards
-  where it's going once it slides past its angle, and resists the slide growing (but never a
-  slide being caught): that takes the swing out of a caught slide, which would otherwise carry
-  the car into a slide the other way. Both get firmer with speed (the angle halves from 70 to
+  where it's going once it slides past its angle, and damps the slide angle changing (both
+  ways, past 2°): that takes the swing out of a caught slide, which would otherwise carry the
+  car into a slide the other way. Both get firmer with speed (the angle halves from 70 to
   110 km/h, and doubles at 35 km/h), so drifting round a slow bend is easy and a slide at
-  120 km/h is caught. The understeer limiter eases the lock off while the steered tyres slide
+  120 km/h is caught. It only acts with at least three quarters of the wheels on the ground (in
+  the air the slip angle swings about without the tyres doing it, and turning the body then
+  landed it rotating), and the slip rate it reacts to is smoothed and capped. The understeer limiter eases the lock off while the steered tyres slide
   sideways and the rear ones grip (pushing wide), so holding full lock gives the tightest turn
   the tyres allow instead of a plough; it leaves the lock alone in a drift, where it's needed
   to countersteer, and countersteer is always possible (lock grows by the slip angle).
@@ -154,10 +183,8 @@ Riders.cs             is a player riding a vehicle?
   - springs sized per wheel from where the weight sits (also a trailer's weight on its tractor),
     so a loaded truck sits level;
   - body roll is mostly real: the springs resist leaning less than bouncing (`rollStiffness`
-    0.3: our vehicles are twice as wide as real ones, so they'd hardly lean otherwise; the demo
-    designs set their own until suspension parts exist: buggy 1.2, rally car 0.8, saloon,
-    hatchback and rally truck 0.6, muscle car 0.45, van 0.35), and the centre of mass is only held
-    down for very tall builds. The dampers follow the roll springs but damp leaning less than
+    0.3: our vehicles are twice as wide as real ones, so they'd hardly lean otherwise; anti-roll
+    bar parts add to it per axle), and the centre of mass is only held down for very tall builds. The dampers follow the roll springs but damp leaning less than
     bouncing (`rollDamping` 0.6), so the body springs back upright after a corner instead of
     easing back: a load high up (the heavy truck's iron) cancels much of the roll springs, which
     left them over-damped (it took 1.7 s to come upright; now 0.8 s). A tall, loaded van
@@ -181,9 +208,15 @@ Riders.cs             is a player riding a vehicle?
   above: green gripping, orange sliding, red spinning under power, blue locked, grey in the
   air, driven ones edged white. F5 shows a telemetry overlay for tuning (graphs of speed, revs,
   inputs, slip, lean; per wheel its load, grip used and slip). The camera widens its view with
-  speed, shakes on hard jolts and tilts into slides. The revs come from an automatic gearbox
-  that's only for show (the drive force doesn't use it): they follow the driven wheels, so
-  wheelspin or a wheel in the air flares them, and the clutch slips pulling away.
+  speed, shakes on hard jolts and tilts into slides (not below about 30 km/h, where the slip
+  angle swings about); when something comes between it and the vehicle (a crest, a wall) it
+  eases in front of it quickly and back out slowly instead of popping. The rev counter follows
+  the driven wheels, so wheelspin or a wheel in the air flares it, and the clutch slips pulling
+  away; the gear box shows "-" while shifting and whether the gears are auto or manual.
+- **Effects in builds.** Smoke, dust, flames and skid marks copy `Resources/VehicleEffects/
+  Particles.mat` (made by the map builder if it's missing). A build only contains the shaders
+  (and keyword variants) some asset uses, so `Shader.Find` for the URP particle shader returned
+  null there and the effects threw on start: no smoke in builds.
 - **Sound.** Engines only run while someone (or an autopilot) is actually driving. Each engine
   piece plays a recorded loop from the sound bank (`Assets/Audio/Vehicle sounds.asset`: swap
   clips and pitch ranges in the inspector), stretched from idle to the redline, muffled off the
@@ -203,9 +236,28 @@ cornering grip, stability control that damps the swing and firms up with speed, 
 limiter that leaves countersteer alone), three new test cars (muscle car, hatchback, rally car)
 and the rolling hills.
 
-- Still open: gearbox as a part (ratios) with automatic or manual shifting as a player setting
-  (proposed, not agreed yet), and builder parts (tyres, suspension and anti-roll bars,
-  differentials, brakes, wings, ballast).
+Also built that day while the owner was away (they said to go ahead), to be tried: the
+gearbox as proposed (real gears for every engine; the ratios are a part, shifting is the
+player's setting: G, E/Q), anti-roll bars (replacing the demo designs' own roll stiffness),
+a wing and ballast; and the fix for effects missing in builds.
+
+Still open:
+- **Rally truck rider demo.** Since the tyre and assist changes the truck has occasional big
+  slides at 110-125 km/h on the washboard, after the jump and over the big rollers, and a rider
+  is thrown roughly every two or three laps (the last commit before them carried a rider for
+  3.5 laps in one run). Fixed so far: stability control kicking the truck in the air (it now
+  needs three quarters of the wheels down) and the autopilot's steering oscillating (it damps
+  slip-angle swings). Compared over many laps: the old stability control was worse, the old
+  roll damping about the same. Next to try: slow the autopilot over the rough sections, or
+  look at how the truck lands off the rollers (nose first, then a fast slide).
+- **Camera jitter/glitch** the owner saw in a build: not reproduced. The follow camera was
+  smooth in my measurements (on flat ground and in the hills; walking in the hills too). Made
+  defensively smoother: the pull-in in front of terrain eases in and out, and the slide tilt
+  fades out at low speed. Need to know where it happened (on foot or driving, which vehicle,
+  which camera).
+- Builder parts not made: tyre compounds, springs and dampers, brakes, differentials.
+- Manual gears are a player setting; if the owner prefers it as a build decision (an "auto" vs
+  "manual" gearbox part), `EngineRevs.Manual` can be set from the part instead.
 
 ## Known gaps and next steps
 
@@ -219,8 +271,9 @@ and the rolling hills.
   off-road area). Flipping or looping drops you: past 45° of tilt you're no longer standing.
 - **Multiplayer:** planned as driver authority: the driver's machine runs the vehicle's physics
   and others see a smoothed copy. Rigid-body physics can't be predicted like player movement.
-- No real gears (the gearbox is only for show), clutch, fuel or ignition (an engine starts when
-  someone drives); no differential (the drive is shared equally).
+- No clutch pedal, stalling, fuel or ignition (an engine starts when someone drives); no
+  differential (the drive is shared by wheel load, like a limited-slip diff).
+- Builder parts not made yet: tyres (compounds), springs and dampers, brakes, differentials.
 - No crash damage; pieces don't break off. Vehicles don't damage buildings.
 - No uncouple key for trailers, and no landing legs: an uncoupled trailer rests on its nose.
 - Vehicles only drive on colliders (fine for voxel terrain with colliders).

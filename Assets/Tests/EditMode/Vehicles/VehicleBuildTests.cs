@@ -44,7 +44,8 @@ namespace ShooterMashup.Vehicles.Tests
         public void VehicleParts_AreRefusedInTheWorld()
         {
             var worldSys = new BuildSystem(new BuildConfig(), new VehicleBuildWorld((b, t) => true, b => b, null));
-            foreach (string name in new[] { "Wheel", "Wheel (free)", "Driver seat", "Engine V8", "Fifth wheel", "Kingpin" })
+            foreach (string name in new[] { "Wheel", "Wheel (free)", "Driver seat", "Engine V8", "Fifth wheel", "Kingpin",
+                         "Gearbox long", "Anti-roll bar", "Wing", "Ballast 1x1" })
             {
                 Assert.IsTrue(PieceCatalog.All[Type(name)].VehicleOnly, name);
                 Assert.AreEqual(BuildFailure.VehicleOnly,

@@ -120,6 +120,7 @@ namespace ShooterMashup.EditorTools
 
             BuildPlayer(HubArrival + new Vector3(0, 0.65f, 0));
             BuildVehicleSounds();
+            BuildVehicleEffectsMaterial();
 
             AssetDatabase.SaveAssets();
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -485,6 +486,32 @@ namespace ShooterMashup.EditorTools
         }
 
         const string SoundBankPath = "Assets/Audio/Vehicle sounds.asset";
+
+        const string ParticleMaterialPath = "Assets/Resources/" + VehicleEffects.ParticleTemplate + ".mat";
+
+        /// <summary>
+        /// The material vehicle effects (smoke, dust, flames, skid marks) are copied from at run
+        /// time: an asset in Resources, so builds include its shader and the transparent variant
+        /// (made if it's missing).
+        /// </summary>
+        public static void BuildVehicleEffectsMaterial()
+        {
+            if (AssetDatabase.LoadAssetAtPath<Material>(ParticleMaterialPath) != null)
+                return;
+            EnsureFolder("Assets/Resources");
+            EnsureFolder(System.IO.Path.GetDirectoryName(ParticleMaterialPath).Replace('\\', '/'));
+            var mat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit")) { name = "Particles" };
+            mat.SetColor("_BaseColor", Color.white);
+            mat.SetFloat("_Surface", 1f);
+            mat.SetFloat("_Blend", 0f);
+            mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            mat.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            mat.SetFloat("_ZWrite", 0f);
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.renderQueue = (int)RenderQueue.Transparent;
+            AssetDatabase.CreateAsset(mat, ParticleMaterialPath);
+        }
 
         /// <summary>
         /// The engine sound bank: made with a first guess of which recorded loop suits which

@@ -29,7 +29,16 @@ namespace ShooterMashup.Building
         /// <summary>A trailer coupling half (vehicles only), or null.</summary>
         public CouplingSpec Coupling { get; private set; }
         /// <summary>Only buildable on a vehicle: the world refuses it.</summary>
-        public bool VehicleOnly => Wheel != null || Seat != null || Engine != null || Coupling != null;
+        public bool VehicleOnly => Wheel != null || Seat != null || Engine != null || Coupling != null
+                                   || Gearbox != null || AntiRollBar != null || Wing != null || OwnMass > 0f;
+        /// <summary>A gearbox (vehicles only), or null.</summary>
+        public GearboxSpec Gearbox { get; private set; }
+        /// <summary>An anti-roll bar (vehicles only), or null.</summary>
+        public AntiRollBarSpec AntiRollBar { get; private set; }
+        /// <summary>A wing (vehicles only), or null.</summary>
+        public WingSpec Wing { get; private set; }
+        /// <summary>Its own mass in kg whatever its material (vehicle parts), or 0: from its volume and material.</summary>
+        public float OwnMass { get; private set; }
 
         public PieceDef(string name, Obb[] boxes, Vector3[] snapPoints)
         {
@@ -55,6 +64,35 @@ namespace ShooterMashup.Building
         internal PieceDef WithEngine(EngineSpec engine)
         {
             Engine = engine;
+            OwnMass = engine.mass;
+            return this;
+        }
+
+        internal PieceDef WithGearbox(GearboxSpec gearbox)
+        {
+            Gearbox = gearbox;
+            OwnMass = gearbox.mass;
+            return this;
+        }
+
+        internal PieceDef WithAntiRollBar(AntiRollBarSpec bar)
+        {
+            AntiRollBar = bar;
+            OwnMass = bar.mass;
+            return this;
+        }
+
+        internal PieceDef WithWing(WingSpec wing)
+        {
+            Wing = wing;
+            OwnMass = wing.mass;
+            return this;
+        }
+
+        /// <summary>A vehicle part of this mass (kg) whatever its material, e.g. ballast.</summary>
+        internal PieceDef WithOwnMass(float kg)
+        {
+            OwnMass = kg;
             return this;
         }
 
@@ -104,9 +142,11 @@ namespace ShooterMashup.Building
     }
 
     /// <summary>
-    /// An engine. Engines on a vehicle add up and drive its driven wheels: at low speed with up to
-    /// `pull` (the most its gearing puts through the wheels), higher up with its power (force =
-    /// power / speed), up to its top speed, where a limiter cuts in.
+    /// An engine with its own gearbox. Engines on a vehicle add up and drive its driven wheels
+    /// through the gears: at low speed with up to `pull` (the most its first gear puts through the
+    /// wheels), higher up with its power, which depends on the revs (the most near the redline),
+    /// and in top gear up to its top speed, where the limiter cuts in. A gearbox part replaces
+    /// the ratios (see GearboxSpec).
     /// </summary>
     public sealed class EngineSpec
     {
@@ -114,8 +154,7 @@ namespace ShooterMashup.Building
         public readonly float pull;       // N, the most force at the wheels (low gears)
         public readonly float topSpeed;   // m/s
         public readonly float mass;       // kg (the piece's own mass, whatever its material)
-        // Its character, for the rev counter and the sound (the gearbox is only for show: the drive
-        // force above doesn't depend on it).
+        // Its revs (for the power curve, the rev counter and the sound) and its own gearbox.
         public readonly float idle, redline; // rpm
         public readonly int cylinders, gears;
 
@@ -129,6 +168,62 @@ namespace ShooterMashup.Building
             this.redline = redline;
             this.cylinders = cylinders;
             this.gears = gears;
+        }
+    }
+
+    /// <summary>
+    /// A gearbox: replaces the gear ratios the engines come with. Shorter gears pull harder and
+    /// reach a lower top speed; longer ones the other way round. Whether the gears change by
+    /// themselves or by the driver's hand is the driver's setting, not the part's.
+    /// </summary>
+    public sealed class GearboxSpec
+    {
+        public readonly int gears;
+        public readonly float length;     // top speed (and gear speeds) relative to the engine's own gearbox
+        public readonly float shiftTime;  // s without drive while a gear changes
+        public readonly float mass;       // kg
+
+        public GearboxSpec(int gears, float length, float shiftTime, float mass)
+        {
+            this.gears = gears;
+            this.length = length;
+            this.shiftTime = shiftTime;
+            this.mass = mass;
+        }
+    }
+
+    /// <summary>
+    /// An anti-roll bar: stiffens the springs against leaning on the axle it's built by (within
+    /// 1.5 m along the vehicle), so a bar at the front makes a car push wide and one at the
+    /// back makes it turn in (and the back step out sooner).
+    /// </summary>
+    public sealed class AntiRollBarSpec
+    {
+        public readonly float stiffness;  // added to the roll stiffness of the wheel pairs it's near
+        public readonly float mass;
+
+        public AntiRollBarSpec(float stiffness, float mass)
+        {
+            this.stiffness = stiffness;
+            this.mass = mass;
+        }
+    }
+
+    /// <summary>
+    /// A wing: pushes down where it's built, growing with the square of the speed, and adds a
+    /// little drag. At the back it plants the rear wheels at speed, at the front the front ones.
+    /// </summary>
+    public sealed class WingSpec
+    {
+        public readonly float downforce;  // N at 30 m/s (108 km/h)
+        public readonly float drag;       // N at 30 m/s
+        public readonly float mass;
+
+        public WingSpec(float downforce, float drag, float mass)
+        {
+            this.downforce = downforce;
+            this.drag = drag;
+            this.mass = mass;
         }
     }
 
@@ -264,6 +359,16 @@ namespace ShooterMashup.Building
             all.Add(DriverSeat("Driver seat").In(wood, iron, scrap));
             all.Add(CouplingPiece("Fifth wheel", false).In(wood, iron, scrap));
             all.Add(CouplingPiece("Kingpin", true).In(wood, iron, scrap));
+            // Gearboxes (gears, top speed relative to the engine's own gearbox, seconds per shift, kg):
+            // without one, the engines' own gears (see EngineSpec).
+            all.Add(Block("Gearbox close-ratio", new Vector3(0.5f, 0.4f, 0.6f)).WithGearbox(new GearboxSpec(6, 0.8f, 0.2f, 60f)).In(wood, iron, scrap));
+            all.Add(Block("Gearbox long", new Vector3(0.5f, 0.4f, 0.6f)).WithGearbox(new GearboxSpec(6, 1.2f, 0.3f, 70f)).In(wood, iron, scrap));
+            all.Add(Block("Gearbox crawler", new Vector3(0.6f, 0.5f, 0.7f)).WithGearbox(new GearboxSpec(8, 0.6f, 0.4f, 120f)).In(wood, iron, scrap));
+            // Anti-roll bars (roll stiffness added to the axle they're built by), a wing and ballast.
+            all.Add(Block("Anti-roll bar", new Vector3(0.6f, 0.12f, 0.12f)).WithAntiRollBar(new AntiRollBarSpec(0.3f, 15f)).In(wood, iron, scrap));
+            all.Add(Block("Anti-roll bar (heavy)", new Vector3(0.6f, 0.15f, 0.15f)).WithAntiRollBar(new AntiRollBarSpec(0.9f, 25f)).In(wood, iron, scrap));
+            all.Add(WingPiece("Wing").WithWing(new WingSpec(2500f, 300f, 30f)).In(wood, iron, scrap));
+            all.Add(Cuboid("Ballast 1x1", 1f, 0.25f, 1f).WithOwnMass(500f).In(wood, iron, scrap));
             return all.ToArray();
         }
 
@@ -499,6 +604,23 @@ namespace ShooterMashup.Building
             var mountBox = new Obb(new Vector3(inner + mount / 2f, 0, 0), new Vector3(mount, mount, mount));
             var wheel = new WheelSpec(new Vector3(inner + mount + gap + width / 2f, 0, 0), radius, width, mass, travel, driven, grip);
             return new PieceDef(name, new[] { mountBox }, new[] { Vector3.zero, new Vector3(inner, 0, 0) }).WithWheel(wheel);
+        }
+
+        /// <summary>A box `size` big, snapping by the middle of its bottom (it sits on a floor): gearboxes, anti-roll bars.</summary>
+        static PieceDef Block(string name, Vector3 size) =>
+            new PieceDef(name, new[] { new Obb(new Vector3(0, size.y / 2f, 0), size) }, new[] { Vector3.zero });
+
+        /// <summary>A wing 2.4 m across on two 0.5 m struts, snapping by the middle of its bottom (it sits on a deck or roof).</summary>
+        static PieceDef WingPiece(string name)
+        {
+            const float span = 2.4f, chord = 0.7f, thick = 0.08f, strut = 0.5f;
+            Obb[] boxes =
+            {
+                new Obb(new Vector3(-0.8f, strut / 2f, 0), new Vector3(thick, strut, 0.2f)),
+                new Obb(new Vector3(0.8f, strut / 2f, 0), new Vector3(thick, strut, 0.2f)),
+                new Obb(new Vector3(0, strut + thick / 2f, 0), new Vector3(span, thick, chord)),
+            };
+            return new PieceDef(name, boxes, new[] { Vector3.zero });
         }
 
         /// <summary>An engine block `size` big, snapping by the middle of its bottom (it sits on a floor).</summary>

@@ -65,7 +65,7 @@ namespace ShooterMashup.Vehicles
         public float uprightStrength = 0.5f;
         [Tooltip("Damps rolling and pitching while wheels touch the ground (1/s).")]
         public float uprightDamping = 1.2f;
-        [Tooltip("Roll stiffness: how hard the springs resist leaning (a difference in compression across an axle), as a fraction of how hard they resist bouncing. Our vehicles are about twice as wide as real ones, so their springs alone hardly let them lean; below 1 they roll more. Above 1 it's an anti-roll bar.")]
+        [Tooltip("Roll stiffness: how hard the springs resist leaning (a difference in compression across an axle), as a fraction of how hard they resist bouncing. Our vehicles are about twice as wide as real ones, so their springs alone hardly let them lean; below 1 they roll more. Anti-roll bar parts add to it on the axle they're built by.")]
         public float rollStiffness = 0.3f;
         [Tooltip("Damping of leaning, as a fraction of the damping that matches the roll stiffness. Below 1 the body springs back upright after a corner instead of easing back (a heavy load high up cancels much of the roll springs, which leaves them over-damped).")]
         [Range(0f, 2f)] public float rollDamping = 0.6f;

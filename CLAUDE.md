@@ -172,8 +172,7 @@ Agreed with the owner:
   sounds.asset`, the owner's freesound loops, trimmed and crossfaded) with a synthesised
   fallback, and a driver HUD (rev bar with redline and limiter, gear, TC light, steering vs slip
   strip, wheel diagram). F5: telemetry overlay. Camera: FOV with speed, shake on jolts, tilt into
-  slides. The revs and gears are cosmetic (an automatic gearbox that doesn't affect the drive
-  force). T toggles traction control. Keyboard input builds up (throttle 0.5 s, steering slower
+  slides. (The gears were cosmetic until 2026-10-15; see below.) T toggles traction control. Keyboard input builds up (throttle 0.5 s, steering slower
   at speed). Body roll is mostly real now (owner: cars were too rigid; a loaded van should almost
   roll): `rollStiffness` 0.3, centre of mass only held down for very tall builds, a rollover
   assist past 30°.
@@ -186,8 +185,8 @@ Agreed with the owner:
   full grip at the limit and only "let go" once they slide over 1.5 m/s (down to 75% at 5 m/s,
   regripping the same way). Drive is shared
   by wheel load. The owner liked the trucks' lean but found it too much on the buggy: until
-  suspension parts exist the demo designs set their own `rollStiffness`. Gearbox: the owner sees
-  manual vs auto as a build decision or a player mode (not built yet).
+  suspension parts exist the demo designs set their own `rollStiffness` (replaced by anti-roll
+  bar parts on 2026-10-15).
 - **Assist tuning round 2 (2026-10-15, from the owner's test drive; to be tried):** Casual must
   still allow drifting, Standard must make fast driving manageable (it was easy to lose the
   buggy when power spun the wheels at speed, and hard to get out of a drift). Done with: tyres
@@ -199,11 +198,27 @@ Agreed with the owner:
   drifts). Heavy truck's slow lean recovery: dampers now follow the roll springs with
   `rollDamping` 0.6 (1.7 s to upright, now 0.8 s). New test cars: muscle car (RWD V8), hatchback
   (FWD 4-cyl), rally car (AWD V6). Rolling hills area added.
+- **Gearbox and builder parts (2026-10-15, built while the owner was away; to be tried):**
+  the owner saw manual vs auto as a build decision or a player mode; built as proposed: the
+  ratios are the part, shifting is the player's setting (G toggles auto/manual, remembered;
+  E/Q shift). Every engine now drives through real gears (`EngineRevs`: power curve over the
+  revs, a dip after each shift, no drive while shifting, limiter at each gear's redline, lugging
+  in tall gears); its own ratios unless a gearbox part (close-ratio x0.8 top speed, long x1.2,
+  crawler x0.6 with 8 gears) replaces them. Also anti-roll bars (light +0.3 / heavy +0.9 roll
+  stiffness on the axle they're near: placement sets the balance; they replace the per-design
+  `rollStiffness`), a wing (downforce at its position, 2500 N at 108 km/h) and 500 kg ballast.
+  Not built: tyre compounds, springs/dampers, brakes, differentials. Vehicle-part masses are
+  `PieceDef.OwnMass`.
+- **Effects in builds (2026-10-15):** `Shader.Find` of the URP particle shader returns null in a
+  build (stripped: nothing referenced it), so `VehicleEffects` threw on start and builds had no
+  smoke. Runtime materials now copy `Assets/Resources/VehicleEffects/Particles.mat`. Rule: any
+  runtime `Shader.Find` needs an asset (in a scene or Resources) using that shader and keywords.
 
 ## To-do / open questions
 
-- **Vehicles:** the 2026-10-15 backlog is done and waits for the owner's test drive (see
-  "Backlog" in `Assets/Scripts/Vehicles/README.md`); still open: gearbox and builder parts.
+- **Vehicles:** the 2026-10-15 backlog, the gearbox and the first builder parts are done and
+  wait for the owner's test drive (see "Backlog" in `Assets/Scripts/Vehicles/README.md`, which
+  also lists what's still open: the rally truck rider demo, the camera glitch report).
 
 - **Open building topics (raised 2026-10-12):** stair width (1 and 3 m wide stairs now, still
   being tried out), ladders (wood ladder pieces added 2026-10-12, more to try), and roofs (45°, 27° and 63° sets with corners, caps and

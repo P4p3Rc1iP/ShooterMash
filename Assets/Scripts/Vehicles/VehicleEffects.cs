@@ -234,10 +234,17 @@ namespace ShooterMashup.Vehicles
             return ps;
         }
 
+        /// <summary>The particle material asset (in a Resources folder) that runtime materials are copied from.</summary>
+        public const string ParticleTemplate = "VehicleEffects/Particles";
+
         /// <summary>An unlit, alpha-blended material that uses vertex colours (particles, skid marks).</summary>
         public static Material ParticleMaterial(string name, Texture texture)
         {
-            var mat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit")) { name = name };
+            // From a material asset in Resources: a build only has the shaders (and keyword variants)
+            // that some asset uses, so Shader.Find alone returns null there (no smoke in builds).
+            var template = Resources.Load<Material>(ParticleTemplate);
+            var mat = template != null ? new Material(template) { name = name }
+                : new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit")) { name = name };
             if (texture != null)
                 mat.SetTexture("_BaseMap", texture);
             mat.SetColor("_BaseColor", Color.white);

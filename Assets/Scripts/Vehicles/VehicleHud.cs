@@ -47,7 +47,8 @@ namespace ShooterMashup.Vehicles
             GUI.Label(new Rect(x, panel.y + 4f, right - x - 70f, 44f), $"{Mathf.Abs(v.ForwardSpeed) * 3.6f:0}", big);
             GUI.Label(new Rect(right - 68f, panel.y + 22f, 68f, 24f), "km/h", small);
             Fill(new Rect(right - 40f, panel.y + 52f, 40f, 40f), new Color(1f, 1f, 1f, 0.12f));
-            GUI.Label(new Rect(right - 40f, panel.y + 52f, 40f, 40f), gear, label);
+            GUI.Label(new Rect(right - 40f, panel.y + 52f, 40f, 40f), revs.Shifting ? "-" : gear, label);
+            GUI.Label(new Rect(right - 68f, panel.y + 36f, 68f, 16f), revs.Manual ? "manual (Q/E)" : "auto", small);
 
             // The rev bar: segments up to the redline, the last tenth red; flashing on the limiter.
             const int segments = 24;

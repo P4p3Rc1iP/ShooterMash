@@ -75,9 +75,6 @@ namespace ShooterMashup.Vehicles
             if (v == null)
                 return;
             v.name = $"{design}";
-            // Until suspension parts exist, each design gets its own roll stiffness: small cars
-            // stiffer, the trucks soft (they lean, which suits them).
-            v.tuning.rollStiffness = RollStiffness(design);
             if (design == Design.Semi)
             {
                 // The trailer is built beside the tractor (lifts can't overlap), then coupled.
@@ -107,19 +104,6 @@ namespace ShooterMashup.Vehicles
                 pilot.waitForRider = autopilotWaitForRider;
             }
         }
-
-        /// <summary>How hard each design's springs resist leaning (see VehicleTuning.rollStiffness).</summary>
-        public static float RollStiffness(Design design) => design switch
-        {
-            Design.Buggy => 1.2f,
-            Design.Saloon => 0.6f,
-            Design.RallyTruck => 0.6f,
-            Design.Van => 0.35f,
-            Design.MuscleCar => 0.45f,
-            Design.Hatchback => 0.6f,
-            Design.RallyCar => 0.8f,
-            _ => new VehicleTuning().rollStiffness,
-        };
 
         public static List<Placement> PlanFor(Design design) => design switch
         {
@@ -230,6 +214,8 @@ namespace ShooterMashup.Vehicles
             foreach (float x in new[] { -0.5f, 0.5f })                         // roll bar: posts on the rails...
                 p.Place("Pillar 1 m", new Vector3(x, 2 * beamMid, -0.4f));
             p.Place("Beam 1 m", new Vector3(0, 2 * beamMid + 1f - Planner.B, -0.4f)); // ...and a bar across
+            p.Place("Anti-roll bar (heavy)", new Vector3(0, Planner.B, 1.5f));      // on the front bumper
+            p.Place("Anti-roll bar (heavy)", new Vector3(0.5f, Planner.B, -1.2f), 90); // on the right rail, beside the engine
             foreach ((float z, string wheel) in new[] { (1.5f, "Wheel (free)"), (-1.5f, "Wheel") })
             {
                 p.Place(wheel, new Vector3(0.5f, beamMid, z));                 // right side, axle along +x
@@ -252,6 +238,8 @@ namespace ShooterMashup.Vehicles
             p.Axle(-2f, "Small wheel (free)");
             p.Place("Engine V6", new Vector3(0, Planner.Deck, 2f));
             p.Place("Driver seat", new Vector3(-0.6f, Planner.Deck, 0.4f));
+            p.Place("Anti-roll bar", new Vector3(0.9f, Planner.Deck, 2f));
+            p.Place("Anti-roll bar", new Vector3(0.9f, Planner.Deck, -2f));
             p.Sides(Planner.Deck, -1f, 0f, 1f);
             foreach (float x in new[] { -1.385f, 1.385f })
             foreach (float z in new[] { -1f, 1f })
@@ -304,6 +292,8 @@ namespace ShooterMashup.Vehicles
             p.Axle(-2f, "Wheel");
             p.Place("Engine V8", new Vector3(0, d, 2f));
             p.Place("Driver seat", new Vector3(-0.6f, d, -0.6f));
+            p.Place("Anti-roll bar", new Vector3(0.9f, d, 2.5f));                 // front only: it pushes wide rather than spinning
+            p.Place("Gearbox long", new Vector3(0.6f, d, -0.6f));
             p.Sides(d, -1.5f, -0.5f, 0.5f);
             foreach (float x in new[] { -1.385f, 1.385f })
             foreach (float z in new[] { -1.5f, 0.5f })
@@ -326,6 +316,8 @@ namespace ShooterMashup.Vehicles
             p.Axle(-1f, "Small wheel (free)");
             p.Place("Engine 4-cyl", new Vector3(0, d, 2f));
             p.Place("Driver seat", new Vector3(-0.6f, d, 0.4f));
+            p.Place("Anti-roll bar", new Vector3(0.9f, d, 2.2f));
+            p.Place("Anti-roll bar", new Vector3(0.6f, d, -1f));
             p.Sides(d, -1f, 0f, 1f);
             p.Across(d, -1.4f);                                                // the hatch
             foreach (float x in new[] { -1.385f, 1.385f })
@@ -349,6 +341,9 @@ namespace ShooterMashup.Vehicles
             p.Axle(-1.5f, "Wheel");
             p.Place("Engine V6", new Vector3(0, d, 1.5f));
             p.Place("Driver seat", new Vector3(-0.6f, d, -0.2f));
+            p.Place("Anti-roll bar", new Vector3(0.9f, d, 1.5f));
+            p.Place("Anti-roll bar", new Vector3(0.9f, d, -1.5f));
+            p.Place("Gearbox close-ratio", new Vector3(0.6f, d, -0.4f));
             p.Sides(d, -1.5f, -0.5f, 0.5f);
             foreach (float x in new[] { -1.385f, 1.385f })
             foreach (float z in new[] { -1f, 1f })
@@ -391,6 +386,8 @@ namespace ShooterMashup.Vehicles
             var p = new Planner();
             p.Place("Engine V8", new Vector3(-0.85f, Planner.Deck, 2f));
             p.Place("Engine V8", new Vector3(0.85f, Planner.Deck, 2f));
+            p.Place("Anti-roll bar", new Vector3(0, Planner.Deck, 2.8f));
+            p.Place("Anti-roll bar", new Vector3(0, Planner.Deck, -2.5f));
             list.AddRange(p.list);
             return list;
         }

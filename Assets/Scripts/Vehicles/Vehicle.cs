@@ -46,6 +46,7 @@ namespace ShooterMashup.Vehicles
             public float fifthWheelShare; // the fraction of a load on the fifth wheel it carries
             public Wheel partner;         // the wheel across the axle from it, for the anti-roll bar
             public float fromPivot, lateral; // ahead of the turning pivot, and right of the middle (m)
+            public float barStiffness;    // roll stiffness added by anti-roll bars by its axle
         }
 
         static readonly RaycastHit[] Hits = new RaycastHit[16];
@@ -70,6 +71,8 @@ namespace ShooterMashup.Vehicles
         Vector3 kingpinPoint, fifthWheelPoint; // local
         float kingpinShare;              // the fraction of a trailer's weight on its kingpin
         ConfigurableJoint joint;         // to the tractor, while coupled as a trailer
+        readonly List<(Vector3 at, float stiffness)> bars = new List<(Vector3, float)>();   // anti-roll bars (local)
+        readonly List<(Vector3 at, WingSpec spec)> wings = new List<(Vector3, WingSpec)>();  // wings (local, where they push)
 
         public override BuildSystem System => system;
         public override PieceViews Views => views;
@@ -129,6 +132,8 @@ namespace ShooterMashup.Vehicles
         /// <summary>The front wheels' steering angle (degrees, positive right) and the most they could turn now.</summary>
         public float SteerAngle { get; private set; }
         public float SteerLock { get; private set; }
+        /// <summary>The name of its gearbox part, or null: the engine's own gears.</summary>
+        public string GearboxName { get; private set; }
         /// <summary>The name of its most powerful engine piece (for its sound), or null.</summary>
         public string EngineName { get; private set; }
         /// <summary>Where the engines' exhausts come out, in the vehicle's space (for backfires).</summary>
@@ -366,6 +371,10 @@ namespace ShooterMashup.Vehicles
             EngineName = null;
             exhausts.Clear();
             hasKingpin = hasFifthWheel = false;
+            GearboxSpec gearbox = null;
+            GearboxName = null;
+            bars.Clear();
+            wings.Clear();
             float mass = 0f;
             Vector3 moment = Vector3.zero;
             var ids = new List<int>(system.Pieces.Keys);
@@ -393,6 +402,15 @@ namespace ShooterMashup.Vehicles
                     Vector3 back = p.record.rotation * Vector3.back;
                     exhausts.Add(block.center + back * (block.Bounds.extents.z * 0.9f) + Vector3.up * block.Bounds.extents.y);
                 }
+                if (p.def.Gearbox != null && gearbox == null)
+                {
+                    gearbox = p.def.Gearbox;                       // the first one counts
+                    GearboxName = p.def.name;
+                }
+                if (p.def.AntiRollBar != null)
+                    bars.Add((p.record.position, p.def.AntiRollBar.stiffness));
+                if (p.def.Wing != null)
+                    wings.Add((p.record.position + p.record.rotation * Vector3.up * p.boxes[p.boxes.Length - 1].center.y, p.def.Wing));
                 if (p.def.Coupling != null)
                 {
                     Vector3 point = p.record.position + p.record.rotation * p.def.Coupling.point;
@@ -452,10 +470,11 @@ namespace ShooterMashup.Vehicles
                 topSpeed = 26f;
             }
             TopSpeed = topSpeed > 0f ? topSpeed : 26f;
-            if (loudest != null)
-                Revs.Configure(loudest.idle, loudest.redline, loudest.cylinders, loudest.gears, TopSpeed);
-            else
-                Revs.Configure(850f, 6500f, 4, 5, TopSpeed);
+            // The gears: the engine's own, or a gearbox part's, which can make it faster or slower.
+            int ownGears = loudest != null ? loudest.gears : 5;
+            Revs.Configure(loudest?.idle ?? 850f, loudest?.redline ?? 6500f, loudest?.cylinders ?? 4, ownGears, TopSpeed,
+                gearbox?.gears ?? ownGears, gearbox?.length ?? 1f, gearbox?.shiftTime ?? 0.3f);
+            TopSpeed = Revs.TopSpeed;
             body.centerOfMass = centerOfMass;
             body.inertiaTensor = Inertia(ids, centerOfMass, body.mass);
             body.inertiaTensorRotation = Quaternion.identity;
@@ -471,11 +490,11 @@ namespace ShooterMashup.Vehicles
             _ => tuning.woodDensity,
         };
 
-        /// <summary>A box of a piece: its volume times its material's density, or for an engine its own mass.</summary>
+        /// <summary>A box of a piece: its volume times its material's density, or for a vehicle part (engine, ballast...) its own mass.</summary>
         float PieceMass(Piece p, Obb box)
         {
-            if (p.def.Engine != null)
-                return p.def.Engine.mass / p.boxes.Length;
+            if (p.def.OwnMass > 0f)
+                return p.def.OwnMass / p.boxes.Length;
             return box.Volume * Density(p.record.material);
         }
 
@@ -541,6 +560,16 @@ namespace ShooterMashup.Vehicles
                         w.partner = o;
                     }
                 }
+            }
+            // Anti-roll bars stiffen the axle they're built by (within 1.5 m along), so where they go
+            // sets the balance: at the front the car pushes wide, at the back it turns in.
+            foreach (Wheel w in wheels)
+            {
+                w.barStiffness = 0f;
+                float along = Vector3.Dot(w.anchor, forward);
+                foreach ((Vector3 at, float stiffness) in bars)
+                    if (Mathf.Abs(Vector3.Dot(at, forward) - along) < 1.5f)
+                        w.barStiffness += stiffness;
             }
             Bounds extent = LocalBounds();
             frontalArea = Mathf.Max(extent.size.x * extent.size.y, 0.5f);
@@ -671,6 +700,16 @@ namespace ShooterMashup.Vehicles
             // Air drag, by the vehicle's frontal area: what holds fast light cars back, hardly a heavy truck.
             Vector3 airVelocity = body.linearVelocity;
             body.AddForce(-airVelocity * (0.5f * 1.2f * t.dragCoefficient * frontalArea * airVelocity.magnitude));
+            // Wings push down where they're built, with the square of the speed through the air
+            // along the vehicle, and drag a little.
+            if (wings.Count > 0)
+            {
+                float along = Vector3.Dot(airVelocity, transform.TransformDirection(forward));
+                float squared = along * along / (30f * 30f);
+                foreach ((Vector3 at, WingSpec spec) in wings)
+                    body.AddForceAtPosition(-transform.up * (spec.downforce * squared) - airVelocity.normalized * (spec.drag * squared),
+                        transform.TransformPoint(at));
+            }
             UpdateCoupling();
 
             int n = wheels.Count;
@@ -753,11 +792,11 @@ namespace ShooterMashup.Vehicles
             float drive = 0f;
             if (!Parked && !Braking && throttleNow != 0f && drivenOnGround > 0)
             {
+                // Forwards through the gears (see EngineRevs); in reverse with a low gear up to reverseSpeed.
                 float v = Mathf.Abs(speed);
-                float limit = throttleNow > 0f ? TopSpeed : t.reverseSpeed;
-                float force = Mathf.Min(pull, power / Mathf.Max(v, 0.1f));     // low gears, then power
-                float limiter = Mathf.Clamp01((1f - v / limit) / 0.08f);       // eases off near top speed
-                drive = throttleNow * force * limiter;      // shared below by the driven wheels on the ground
+                float force = throttleNow > 0f ? Revs.DriveForce(speed, power, pull)
+                    : Mathf.Min(pull, power / Mathf.Max(v, 0.1f)) * Mathf.Clamp01((1f - v / t.reverseSpeed) / 0.08f);
+                drive = throttleNow * force;                // shared below by the driven wheels on the ground
             }
 
             foreach (Wheel w in wheels)
@@ -797,12 +836,14 @@ namespace ShooterMashup.Vehicles
                 w.compressionSpeed = velocity;
                 float load = Mathf.Max(0f, k * compression * travel + c * velocity);
                 // Roll stiffness: the springs resist the difference in compression across an axle
-                // rollStiffness times as much as they resist both compressing (more: an anti-roll bar).
-                // The dampers follow, so leaning is damped as much as bouncing (softer roll springs
-                // with the full damping would ease back upright slowly instead of springing back).
+                // rollStiffness (plus any anti-roll bars by this axle) times as much as they resist both
+                // compressing. The dampers follow the roll springs, damping leaning rollDamping times as
+                // much (softer roll springs with the full damping would ease back upright slowly
+                // instead of springing back).
+                float roll = t.rollStiffness + w.barStiffness;
                 if (w.partner != null)
-                    load = Mathf.Max(0f, load + (t.rollStiffness - 1f) * k * travel * (compression - w.partner.compression) / 2f
-                        + (Mathf.Sqrt(t.rollStiffness) * t.rollDamping - 1f) * c * (velocity - w.partner.compressionSpeed) / 2f);
+                    load = Mathf.Max(0f, load + (roll - 1f) * k * travel * (compression - w.partner.compression) / 2f
+                        + (Mathf.Sqrt(roll) * t.rollDamping - 1f) * c * (velocity - w.partner.compressionSpeed) / 2f);
                 if (raw > 1f)
                     load += k * (raw - 1f) * travel * 4f;              // bump stop
                 body.AddForceAtPosition(up * load, hit.point);
