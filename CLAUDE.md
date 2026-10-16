@@ -307,8 +307,12 @@ Agreed with the owner:
   and resets itself (`StuntDriver`): a crash into a concrete block narrower than its wheel track
   (90 km/h, throws you over it), a flip off a kicker under one side (90 km/h, self-levelling off)
   and a 28 m teardrop loop that shifts 7 m sideways so the exit clears the entry (108 km/h, stiff
-  springs; the truck makes it round, the rider doesn't)), and **rolling hills** (x +110..350,
-  z +110..350, north-east past the ice: a 240 m heightfield mesh of three long waves, up to 7 m
-  and 16°, with a lineup of six cars at its south edge). Scripted test drives on the flat floor
-  east of the hub (x 130..350) must start north of z -40 (the loop test's run-up crosses there)
-  and keep clear of the hills lineup (x 110..150, z 100).
+  springs; the truck makes it round, the rider doesn't)), and the **driving range** (2026-10-16,
+  replacing the 240 m hills: owner wanted a much larger, more varied area to cruise flat out):
+  4 x 4 km of procedural terrain (`DrivingTerrain`, made at run time in streamed tiles, so the
+  scene stays small) east of the floor's edge (x +360..4456, z ±2048): plains in the south half,
+  rolling hills north-west, steep hills (up to 40°) north-east, a berm round the outside, speed
+  posts every 100 m along z = -1000, a lineup of seven cars at the arrival (x 407). Scripted test
+  drives on the flat floor east of the hub (x 130..350) must start north of z -40 (the loop
+  test's run-up crosses there); on the range, spawn at `DrivingTerrain.Height` (it isn't 0 away
+  from the apron) and keep off the post line.

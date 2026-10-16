@@ -15,7 +15,7 @@ namespace ShooterMashup.EditorTools
     /// tests (stairs, ramps, jump crates, crouch and prone tunnels, a lean corner, ladders,
     /// fall-damage towers, water and slime tanks, a slick floor), building (the showcase,
     /// diggable dirt, bridge cliffs) and off-road (a high-speed rally loop and stunt tests: crash,
-    /// flip, loop) and rolling hills (vehicles on uneven ground). Laid out in metres on a 1 m dev grid.
+    /// flip, loop) and a 4 km driving range (plains, rolling and steep hills). Laid out in metres on a 1 m dev grid.
     /// </summary>
     public static class MovementTestMapBuilder
     {
@@ -28,7 +28,7 @@ namespace ShooterMashup.EditorTools
         static readonly Vector3 CharacterArea = new Vector3(0f, 0f, 140f);
         static readonly Vector3 BuildingArea = new Vector3(-190f, 0f, 0f);
         static readonly Vector3 OffRoadArea = new Vector3(0f, 0f, -200f);
-        static readonly Vector3 HillsArea = new Vector3(230f, 0f, 230f);
+        static readonly Vector3 DrivingRange = new Vector3(360f, 0f, 0f);   // the driving range's west edge, at the floor's edge
         // Where you arrive (feet) and which way you face, by portal or road.
         static readonly Vector3 HubArrival = new Vector3(0f, 0f, -4f);
         static readonly (Vector3 at, float yaw) CharacterArrival = (new Vector3(0f, 0f, 140f), 0f); // the middle of the area
@@ -38,7 +38,7 @@ namespace ShooterMashup.EditorTools
         static readonly Vector3 BarnCorner = new Vector3(60f, 0f, 24f);
         static readonly Vector3 TowerCorner = new Vector3(84f, 0f, 44f);
         static readonly (Vector3 at, float yaw) OffRoadArrival = (new Vector3(-200f, 0f, -98f), 180f); // facing the rally truck
-        static readonly (Vector3 at, float yaw) HillsArrival = (new Vector3(165f, 0f, 98f), 0f); // at the south edge, facing the hills
+        static readonly (Vector3 at, float yaw) DrivingArrival = (new Vector3(395f, 0f, 40f), 90f); // on the range's apron, facing east
 
         static Transform root;
         static Transform area;   // the area being built; groups go under it
@@ -111,8 +111,8 @@ namespace ShooterMashup.EditorTools
             BuildFlipTest(new Vector3(40f, 0f, 125f));
             BuildLoopTest(new Vector3(40f, 0f, 150f));
 
-            area = Area("Hills", HillsArea);
-            BuildHills();
+            area = Area("Driving range", DrivingRange);
+            BuildDrivingRange();
 
             area = Area("Hub", Vector3.zero);
             BuildHub();
@@ -809,81 +809,58 @@ namespace ShooterMashup.EditorTools
         }
 
         /// <summary>
-        /// Rolling hills north-east of the hub: a 240 m square of smooth, uneven ground (three
-        /// overlapping waves, 35 to 110 m long, up to about 7 m high and 16° steep, easing down to
-        /// the floor at the edges), to feel how vehicles drive somewhere less flat than the test
-        /// floor. Most crests keep the wheels on the ground up to about 80 km/h. A lineup of cars
-        /// waits at the south edge, facing the hills.
+        /// The driving range east of the hub: 4 km of procedural terrain (`DrivingTerrain`, built at
+        /// run time in tiles around you, so the scene stays small): plains in the south half for
+        /// cruising flat out, rolling hills in the north-west, steep hills in the north-east, a
+        /// berm round the outside. You arrive on a flat apron at its west edge, level with the test
+        /// floor, with a lineup of cars facing east. Posts every 100 m along a straight line across
+        /// the plains show your speed; signs mark the zones.
         /// </summary>
-        static void BuildHills()
+        static void BuildDrivingRange()
         {
-            var parent = Group("Rolling hills");
-            const float size = 240f, step = 2f, edge = 30f;
-            int n = Mathf.RoundToInt(size / step) + 1;
-            var verts = new Vector3[n * n];
-            var uvs = new Vector2[n * n];
-            for (int i = 0; i < n; i++)
-            for (int j = 0; j < n; j++)
-            {
-                float x = -size / 2f + i * step, z = -size / 2f + j * step;
-                verts[i * n + j] = new Vector3(x, HillHeight(x, z, size, edge), z);
-                uvs[i * n + j] = new Vector2(x, z) / GridSize;
-            }
-            var tris = new int[(n - 1) * (n - 1) * 6];
-            int t = 0;
-            for (int i = 0; i < n - 1; i++)
-            for (int j = 0; j < n - 1; j++)
-            {
-                int a = i * n + j, b = a + 1, c = a + n, d = c + 1;   // b is +z of a, c is +x of a
-                tris[t++] = a; tris[t++] = b; tris[t++] = d;
-                tris[t++] = a; tris[t++] = d; tris[t++] = c;
-            }
-            var mesh = new Mesh { name = "Rolling hills" };
-            mesh.vertices = verts;
-            mesh.uv = uvs;
-            mesh.triangles = tris;
-            mesh.RecalculateNormals();
-            mesh.RecalculateTangents();
-            mesh.RecalculateBounds();
-            AssetDatabase.AddObjectToAsset(mesh, meshContainer);
+            var parent = Group("Driving range");
+            var terrain = parent.gameObject.AddComponent<DrivingTerrain>();
+            terrain.material = matDirt;
+            float H(float x, float z) => terrain.Height(x, z);   // in the range's space (its west edge, middle)
 
-            var go = new GameObject("Hills ground");
-            go.transform.SetParent(parent, false);
-            go.AddComponent<MeshFilter>().sharedMesh = mesh;
-            go.AddComponent<MeshRenderer>().sharedMaterial = matDirt;
-            go.AddComponent<MeshCollider>().sharedMesh = mesh;
-            GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.BatchingStatic | StaticEditorFlags.ContributeGI);
-
-            // The lineup, at the south edge (world positions, west of the arrival).
+            // The lineup, south of where you arrive, facing east.
             (VehicleShowcase.Design design, string sign)[] lineup =
             {
                 (VehicleShowcase.Design.Buggy, "buggy\nRWD"),
                 (VehicleShowcase.Design.MuscleCar, "muscle car\nRWD"),
                 (VehicleShowcase.Design.Hatchback, "hatchback\nFWD"),
+                (VehicleShowcase.Design.Saloon, "saloon\nFWD"),
                 (VehicleShowcase.Design.RallyCar, "rally car\nAWD"),
                 (VehicleShowcase.Design.RallyTruck, "rally truck\nAWD"),
                 (VehicleShowcase.Design.Van, "van\nRWD"),
             };
+            Vector3 arrival = DrivingArrival.at - DrivingRange;
             for (int k = 0; k < lineup.Length; k++)
             {
-                var at = new Vector3(112f + 7f * k, 0f, 100f);
-                var vehicle = new GameObject($"Hills {lineup[k].design}").AddComponent<VehicleShowcase>();
+                var at = new Vector3(arrival.x + 12f, 0f, arrival.z - 12f - 8f * k);
+                var vehicle = new GameObject($"Range {lineup[k].design}").AddComponent<VehicleShowcase>();
                 vehicle.design = lineup[k].design;
-                vehicle.buggyPosition = at;
-                Label(lineup[k].sign, at - HillsArea + new Vector3(0f, 5f, 2f), parent);
+                vehicle.buggyPosition = DrivingRange + at;
+                vehicle.buggyYaw = 90f;
+                Label(lineup[k].sign, at + new Vector3(-4f, 4.5f, 0f), parent, 90f);
             }
-            Label("rolling hills", HillsArrival.at - HillsArea + new Vector3(0f, 6f, 12f), parent);
-        }
+            Label("driving range: 4 km\nplains to the south (flat out), rolling hills north-west, steep hills north-east",
+                arrival + new Vector3(25f, 7f, 0f), parent, 90f);
 
-        /// <summary>The hills' height (m) at a point of the square (centred on 0): three waves in different directions, easing to 0 at the edges.</summary>
-        static float HillHeight(float x, float z, float size, float edge)
-        {
-            float Wave(float dx, float dz, float length, float phase) =>
-                Mathf.Sin(2f * Mathf.PI * (x * dx + z * dz) / length + phase);
-            float h = 3.4f + 1.8f * Wave(0.8f, 0.6f, 110f, 0.3f) + 1.2f * Wave(-0.5f, 0.87f, 70f, 1.7f)
-                      + 0.4f * Wave(0.95f, 0.3f, 35f, 4.1f);
-            float toEdge = Mathf.Min(size / 2f - Mathf.Abs(x), size / 2f - Mathf.Abs(z));
-            return h * Mathf.SmoothStep(0f, 1f, toEdge / edge);
+            // Speed posts every 100 m along a straight line across the plains.
+            const float postLine = -1000f;
+            for (float x = 500f; x <= 3900f; x += 100f)
+            {
+                float h = H(x, postLine);
+                bool km = Mathf.RoundToInt(x) % 1000 == 0;
+                GameObject post = Box(km ? "Kilometre post" : "Post", new Vector3(x, h + 2.5f, postLine), new Vector3(0.4f, 5f, 0.4f), km ? matTarget : matTrim, parent);
+                Object.DestroyImmediate(post.GetComponent<BoxCollider>());   // markers only: nothing to crash into at full throttle
+            }
+            Label("speed posts every 100 m", new Vector3(500f, H(500f, postLine) + 7f, postLine), parent, 90f);
+            // Zone signs.
+            Label("plains", new Vector3(700f, H(700f, -500f) + 8f, -500f), parent, 90f);
+            Label("rolling hills", new Vector3(700f, H(700f, 500f) + 8f, 500f), parent, 90f);
+            Label("steep hills", new Vector3(2300f, H(2300f, 500f) + 10f, 500f), parent, 90f);
         }
 
         /// <summary>
@@ -898,13 +875,14 @@ namespace ShooterMashup.EditorTools
             PortalPair("Building", new Vector3(-6f, 0f, 5f), -45f, BuildingArrival, parent, matDirt);
             PortalPair("Character tests", new Vector3(0f, 0f, 7f), 0f, CharacterArrival, parent, matSlick);
             PortalPair("Off-road", new Vector3(0f, 0f, -9f), 180f, OffRoadArrival, parent, matSlime);
-            PortalPair("Hills", new Vector3(6f, 0f, 5f), 45f, HillsArrival, parent, matTarget);
+            PortalPair("Driving range", new Vector3(6f, 0f, 5f), 45f, DrivingArrival, parent, matTarget);
 
             // Roads to the areas, for driving there.
             Road(new Vector3(0f, 0f, 10f), CharacterArrival.at, parent);
             Road(new Vector3(-8f, 0f, 0f), BuildingArrival.at, parent);
             Road(new Vector3(0f, 0f, -14f), OffRoadArrival.at, parent);
-            Road(new Vector3(8f, 0f, 10f), HillsArrival.at, parent);
+            Road(new Vector3(8f, 0f, 12f), new Vector3(100f, 0f, 45f), parent);   // north of the ice
+            Road(new Vector3(100f, 0f, 45f), DrivingArrival.at, parent);
 
             // A buggy to drive, facing east.
             var buggy = new GameObject("Hub buggy").AddComponent<VehicleShowcase>();
@@ -1025,7 +1003,7 @@ namespace ShooterMashup.EditorTools
             camGo.transform.localPosition = new Vector3(0, motor.movement.standViewHeight, 0);
             var cam = camGo.AddComponent<Camera>();
             cam.nearClipPlane = 0.03f;
-            cam.farClipPlane = 1000f;
+            cam.farClipPlane = 3000f;   // the driving range is 4 km across
             camGo.AddComponent<AudioListener>();
             var view = camGo.AddComponent<PlayerView>();
             view.motor = motor;

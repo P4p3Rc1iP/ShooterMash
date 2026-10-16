@@ -32,10 +32,23 @@ The off-road area also has a 1160 m rally loop with rollers, washboard, rocks an
 jump, where a rally truck drives up to ~150 km/h while you stand on it, and stunt tests (a crash,
 a flip and a loop) by the arrival.
 
-The portal to the right of the spawn (or the road north-east, past the ice) leads to **rolling
-hills**: a 240 m square of smooth waves up to 7 m high and 16° steep, with a lineup of buggy,
-muscle car, hatchback, rally car, rally truck and van at its south edge, to feel the cars on
-ground that isn't flat.
+The portal to the right of the spawn (or the road east, north of the ice) leads to the **driving
+range** (`DrivingTerrain`): 4 x 4 km of terrain east of the test floor. You arrive on a flat
+apron at its west edge, beside a lineup of buggy, muscle car, hatchback, saloon, rally car,
+rally truck and van facing east. The south half is **plains** (swells of a metre or so: flat out
+for kilometres; the rally truck cruises at 200 km/h), the north-west quarter **rolling hills**
+(waves of 35 to 110 m, ±6 m, up to 13°) and the north-east quarter **steep hills** (up to 50 m
+high, 14° on average, up to 40°: the heavy truck crawls up them). Posts every 100 m (red every
+kilometre) run east along z = -1000 to read your speed; they're markers only, nothing to hit. A
+berm runs round the outside.
+
+The terrain is made at run time, so the scene stays small: the whole range in coarse tiles
+(8 m, no collider) to see it from afar, and full-detail tiles (2 m, with a collider) within
+1.3 km of the camera and round every vehicle, worked out on worker threads (heights, and the
+colliders cooked with `Physics.BakeMesh`), so streaming doesn't stall a frame (about 0.7 ms on
+the main thread per tile). Full-detail tiles far from the camera and every vehicle are let go
+again. Heights come from `DrivingTerrain.Height`, a pure function (its own C# Perlin noise, safe
+on worker threads), which the map builder also uses to place the posts and signs.
 
 | Input | Action |
 | --- | --- |
@@ -106,6 +119,7 @@ DrivingAssists.cs     the player's driving assists (casual, standard, expert)
 VehicleSoundBank.cs   recorded engine loops per engine piece (the asset is in Assets/Audio); VehicleSounds puts it in use
 VehicleShowcase.cs    the demo designs, built on a lift and dropped (the semi's trailer is coupled)
 VehicleAutopilot.cs   drives a vehicle round a path (the rally truck), optionally only with a rider
+DrivingTerrain.cs     the driving range: 4 km of procedural terrain, streamed in tiles (worker threads)
 StuntDriver.cs        drives a stunt once someone stands on it, then resets (crash, flip, loop)
 Riders.cs             is a player riding a vehicle?
 ```
@@ -234,7 +248,7 @@ the heavy truck's lean springs back (roll damping), Casual allows drifting again
 is calmer at speed (tyres that let go and regrip gradually, traction control that leaves some
 cornering grip, stability control that damps the swing and firms up with speed, an understeer
 limiter that leaves countersteer alone), three new test cars (muscle car, hatchback, rally car)
-and the rolling hills.
+and the rolling hills (since grown into the 4 km driving range).
 
 Also built that day while the owner was away (they said to go ahead), to be tried: the
 gearbox as proposed (real gears for every engine; the ratios are a part, shifting is the
