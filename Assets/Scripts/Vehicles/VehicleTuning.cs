@@ -69,6 +69,8 @@ namespace ShooterMashup.Vehicles
         public float rollStiffness = 0.3f;
         [Tooltip("Damping of leaning, as a fraction of the damping that matches the roll stiffness. Below 1 the body springs back upright after a corner instead of easing back (a heavy load high up cancels much of the roll springs, which leaves them over-damped).")]
         [Range(0f, 2f)] public float rollDamping = 0.6f;
+        [Tooltip("Progressive roll stiffness: added to the roll stiffness times the square of how far the body leans (the difference in compression across an axle, 0..1). The first degrees of lean stay soft; nearer the end of the travel it gets much stiffer, so soft vehicles lean but don't slam onto their bump stops in ordinary corners.")]
+        public float rollProgression = 1f;
         [Tooltip("How hard the body turns upright in the air (1/s²), so jumps land on the wheels.")]
         public float airUpright = 1.5f;
         [Tooltip("Pushes the vehicle down at speed (m/s² per (m/s)²). It adds grip, so keep it small.")]

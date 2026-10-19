@@ -34,13 +34,22 @@ a flip and a loop) by the arrival.
 
 The portal to the right of the spawn (or the road east, north of the ice) leads to the **driving
 range** (`DrivingTerrain`): 4 x 4 km of terrain east of the test floor. You arrive on a flat
-apron at its west edge, beside a lineup of buggy, muscle car, hatchback, saloon, rally car,
-rally truck and van facing east. The south half is **plains** (swells of a metre or so: flat out
+apron at its west edge, beside a lineup of every design (buggy, muscle car, hatchback, saloon,
+rally car, rally truck, van, heavy truck and the semi with its trailer) facing east. The south half is **plains** (swells of a metre or so: flat out
 for kilometres; the rally truck cruises at 200 km/h), the north-west quarter **rolling hills**
 (waves of 35 to 110 m, ±6 m, up to 13°) and the north-east quarter **steep hills** (up to 50 m
 high, 14° on average, up to 40°: the heavy truck crawls up them). Posts every 100 m (red every
 kilometre) run east along z = -1000 to read your speed; they're markers only, nothing to hit. A
 berm runs round the outside.
+
+A **car chase** waits on the plains south of the arrival (`ChaseGroup`, `ChaseDriver`): a rally
+truck (the quarry) and four pursuers (muscle car, rally car, van, a second rally truck). Stand
+on any of them, or sit in one and drive, and they go: the quarry heads for points a few hundred
+metres ahead, picking the one furthest from the pursuers and staying on the plains and rolling
+hills (about 105 km/h); the pursuers aim at where it will be, each a few metres to its own side,
+so they come alongside (bumps included). Drive the quarry and they chase you; drive a pursuer
+and join in. Stuck, they back off; on their side or roof, they're put back on their wheels.
+Nobody on them: they park.
 
 The terrain is made at run time, so the scene stays small: the whole range in coarse tiles
 (8 m, no collider) to see it from afar, and full-detail tiles (2 m, with a collider) within
@@ -119,6 +128,8 @@ DrivingAssists.cs     the player's driving assists (casual, standard, expert)
 VehicleSoundBank.cs   recorded engine loops per engine piece (the asset is in Assets/Audio); VehicleSounds puts it in use
 VehicleShowcase.cs    the demo designs, built on a lift and dropped (the semi's trailer is coupled)
 VehicleAutopilot.cs   drives a vehicle round a path (the rally truck), optionally only with a rider
+ChaseGroup.cs         a car chase: who's in it, when it runs (someone rides or drives one), where to
+ChaseDriver.cs        drives a quarry or a pursuer in a chase
 DrivingTerrain.cs     the driving range: 4 km of procedural terrain, streamed in tiles (worker threads)
 StuntDriver.cs        drives a stunt once someone stands on it, then resets (crash, flip, loop)
 Riders.cs             is a player riding a vehicle?
@@ -198,7 +209,11 @@ Riders.cs             is a player riding a vehicle?
     so a loaded truck sits level;
   - body roll is mostly real: the springs resist leaning less than bouncing (`rollStiffness`
     0.3: our vehicles are twice as wide as real ones, so they'd hardly lean otherwise; anti-roll
-    bar parts add to it per axle), and the centre of mass is only held down for very tall builds. The dampers follow the roll springs but damp leaning less than
+    bar parts add to it per axle), and the centre of mass is only held down for very tall builds. The roll
+    stiffness is also progressive (`rollProgression` 1: plus the square of how far the body
+    already leans), so soft vehicles lean readily at first but firm up well before the outside
+    springs reach their bump stops: the heavy truck and the van used to sit on the stops (8°)
+    in any full-lock turn, even at 30 km/h; now they lean 4-6° and keep some travel. The dampers follow the roll springs but damp leaning less than
     bouncing (`rollDamping` 0.6), so the body springs back upright after a corner instead of
     easing back: a load high up (the heavy truck's iron) cancels much of the roll springs, which
     left them over-damped (it took 1.7 s to come upright; now 0.8 s). A tall, loaded van

@@ -833,6 +833,8 @@ namespace ShooterMashup.EditorTools
                 (VehicleShowcase.Design.RallyCar, "rally car\nAWD"),
                 (VehicleShowcase.Design.RallyTruck, "rally truck\nAWD"),
                 (VehicleShowcase.Design.Van, "van\nRWD"),
+                (VehicleShowcase.Design.HeavyTruck, "heavy truck 8x8\n15 t of iron"),
+                (VehicleShowcase.Design.Semi, "semi 6x4\nand trailer"),   // last: its trailer is built 30 m further south
             };
             Vector3 arrival = DrivingArrival.at - DrivingRange;
             for (int k = 0; k < lineup.Length; k++)
@@ -861,6 +863,34 @@ namespace ShooterMashup.EditorTools
             Label("plains", new Vector3(700f, H(700f, -500f) + 8f, -500f), parent, 90f);
             Label("rolling hills", new Vector3(700f, H(700f, 500f) + 8f, 500f), parent, 90f);
             Label("steep hills", new Vector3(2300f, H(2300f, 500f) + 10f, 500f), parent, 90f);
+
+            // A car chase on the plains south of the arrival: a rally truck (stand on its back) is
+            // chased by a muscle car, a rally car, a van and a second rally truck. Ride or drive any
+            // of them and they go; the quarry roams the plains and the rolling hills.
+            var chase = new GameObject("Car chase").AddComponent<ChaseGroup>();
+            chase.transform.SetParent(parent, false);
+            chase.area = new Rect(DrivingRange.x + 450f, -1750f, 3250f, 2950f);                  // range x 450..3700, z -1750..1200
+            chase.exclude = new Rect(DrivingRange.x + 1850f, -50f, 2300f, 2200f);               // the steep hills
+            (VehicleShowcase.Design design, Vector3 at, bool quarry, float slot)[] cast =
+            {
+                (VehicleShowcase.Design.RallyTruck, new Vector3(560f, 0f, -320f), true, 0f),
+                (VehicleShowcase.Design.MuscleCar, new Vector3(530f, 0f, -308f), false, -4f),
+                (VehicleShowcase.Design.RallyCar, new Vector3(530f, 0f, -332f), false, 4f),
+                (VehicleShowcase.Design.Van, new Vector3(500f, 0f, -310f), false, -8f),
+                (VehicleShowcase.Design.RallyTruck, new Vector3(500f, 0f, -330f), false, 8f),
+            };
+            foreach ((VehicleShowcase.Design design, Vector3 at, bool quarry, float slot) in cast)
+            {
+                var vehicle = new GameObject($"Chase {design}{(quarry ? " (quarry)" : "")}").AddComponent<VehicleShowcase>();
+                vehicle.design = design;
+                vehicle.buggyPosition = DrivingRange + at + Vector3.up * (H(at.x, at.z) + 0.05f);
+                vehicle.buggyYaw = 90f;
+                vehicle.chase = chase;
+                vehicle.chaseQuarry = quarry;
+                vehicle.chaseSlot = slot;
+            }
+            Label("car chase: stand on any of them (the rally truck in front is chased)\nor drive one, and they go",
+                new Vector3(470f, H(470f, -320f) + 6f, -320f), parent, 90f);
         }
 
         /// <summary>

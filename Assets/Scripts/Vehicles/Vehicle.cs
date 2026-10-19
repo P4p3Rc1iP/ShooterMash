@@ -153,6 +153,7 @@ namespace ShooterMashup.Vehicles
             public Vector3 localAnchor; // in the vehicle's space
             public float width;
             public float load, capacity, force; // N: on the spring, what the tyre could give, what it gives
+            public float compression;  // 0 full droop .. 1 full bump (on the bump stop)
         }
 
         /// <summary>The wheels' states this physics step.</summary>
@@ -165,6 +166,7 @@ namespace ShooterMashup.Vehicles
                 locked = w.locked, slick = w.slick, slip = w.slip, contact = w.hit.point, normal = w.hit.normal,
                 ground = w.grounded ? w.hit.collider : null, localAnchor = w.anchor, width = w.spec.width,
                 load = w.grounded ? w.load : 0f, capacity = w.grounded ? w.capacity : 0f, force = w.grounded ? w.force : 0f,
+                compression = w.compression,
             };
         }
 
@@ -840,9 +842,13 @@ namespace ShooterMashup.Vehicles
                 // compressing. The dampers follow the roll springs, damping leaning rollDamping times as
                 // much (softer roll springs with the full damping would ease back upright slowly
                 // instead of springing back).
-                float roll = t.rollStiffness + w.barStiffness;
+                // Progressive: the further it already leans (the bigger the difference across the
+                // axle), the stiffer, so a soft vehicle leans readily at first but firms up well
+                // before its outside springs reach their bump stops.
+                float lean = w.partner != null ? compression - w.partner.compression : 0f;
+                float roll = t.rollStiffness + w.barStiffness + t.rollProgression * lean * lean;
                 if (w.partner != null)
-                    load = Mathf.Max(0f, load + (roll - 1f) * k * travel * (compression - w.partner.compression) / 2f
+                    load = Mathf.Max(0f, load + (roll - 1f) * k * travel * lean / 2f
                         + (Mathf.Sqrt(roll) * t.rollDamping - 1f) * c * (velocity - w.partner.compressionSpeed) / 2f);
                 if (raw > 1f)
                     load += k * (raw - 1f) * travel * 4f;              // bump stop

@@ -51,7 +51,19 @@ namespace ShooterMashup.Player
         public bool smoothSteps = true;
         public bool landingDip = true;
 
+        [Header("Speed feel (riding a vehicle at speed)")]
+        [Tooltip("Widen the field of view with speed over the ground and shake on a moving platform's hard jolts, like the driving camera. No tilt: rolling the horizon in first person is disorienting (and leaning uses it).")]
+        public bool speedFeel = true;
+        [Tooltip("Extra field of view (degrees) at fullFovSpeed; it starts above startFovSpeed (m/s), so running and strafe jumping don't change it.")]
+        public float speedFov = 10f, startFovSpeed = 12f, fullFovSpeed = 45f;
+        [Tooltip("How much a platform's jolt (m/s² over 25) shakes the view (m per m/s²), the most it shakes (m), and how fast it settles (per second).")]
+        public float shakeStrength = 0.0006f, maxShake = 0.03f, shakeDecay = 6f;
+
         Camera cam;
+        Vector3 lastEye;
+        float groundSpeed, extraFov, shakeAmount, joltSinceFrame;
+        Vector3 lastPlatformVelocity;
+        Rigidbody lastPlatform;
 
         float lastViewHeight = float.NaN;
         float duckChange;
@@ -108,6 +120,58 @@ namespace ShooterMashup.Player
                     landTime = now;
                     break;
             }
+        }
+
+        /// <summary>
+        /// A moving platform's (vehicle's) hardest jolt since the last frame, measured per physics
+        /// step: a Rigidbody's velocity only changes on physics steps, so measured per frame
+        /// ordinary acceleration would look like jolts.
+        /// </summary>
+        void FixedUpdate()
+        {
+            Transform platform = speedFeel && motor != null ? motor.Platform : null;
+            Rigidbody body = platform != null ? platform.GetComponentInParent<Rigidbody>() : null;
+            if (body == null)
+            {
+                lastPlatform = null;
+                return;
+            }
+            Vector3 v = body.linearVelocity;
+            if (body == lastPlatform)
+                joltSinceFrame = Mathf.Max(joltSinceFrame, ((v - lastPlatformVelocity) / Time.fixedDeltaTime).magnitude);
+            lastPlatform = body;
+            lastPlatformVelocity = v;
+        }
+
+        /// <summary>
+        /// The feel of speed, as the driving camera has it: the field of view widens with the eye's
+        /// speed over the ground (smoothed; only past startFovSpeed, so on foot nothing changes),
+        /// and the platform's hard jolts shake the eye a little (it settles quickly). Returns the
+        /// shake offset and widens `wideFov`.
+        /// </summary>
+        Vector3 SpeedFeel(Vector3 eye, Quaternion rotation, float dt, ref float wideFov)
+        {
+            if (dt <= 0f)
+                return Vector3.zero;
+            Vector3 moved = eye - lastEye;
+            lastEye = eye;
+            moved.y = 0f;
+            float speed = moved.magnitude / dt;
+            if (speed > 150f) speed = groundSpeed;                       // a teleport or portal, not speed
+            groundSpeed = Mathf.Lerp(groundSpeed, speed, 1f - Mathf.Exp(-4f * dt));
+            float wanted = speedFov * Mathf.Clamp01((groundSpeed - startFovSpeed) / (fullFovSpeed - startFovSpeed));
+            extraFov = Mathf.Lerp(extraFov, wanted, 1f - Mathf.Exp(-3f * dt));
+            wideFov += extraFov;
+
+            float jolt = joltSinceFrame;
+            joltSinceFrame = 0f;
+            if (jolt > 25f)
+                shakeAmount = Mathf.Max(shakeAmount, Mathf.Min((jolt - 25f) * shakeStrength, maxShake));
+            shakeAmount = Mathf.MoveTowards(shakeAmount, 0f, (shakeDecay * shakeAmount + 0.001f) * dt);
+            if (shakeAmount <= 0f)
+                return Vector3.zero;
+            float t = Time.time * 25f;
+            return rotation * new Vector3(Mathf.PerlinNoise(t, 0.3f) - 0.5f, Mathf.PerlinNoise(0.7f, t) - 0.5f, 0f) * (2f * shakeAmount);
         }
 
         void LateUpdate()
@@ -227,10 +291,13 @@ namespace ShooterMashup.Player
                 rotation = Quaternion.Euler(pitch + addPitch, yaw, -addRoll);
             }
 
+            float wideFov = fov;
+            if (speedFeel)
+                origin += SpeedFeel(origin, rotation, Time.deltaTime, ref wideFov);
             transform.SetPositionAndRotation(origin, rotation);
 
             // Hor+: fov is horizontal at 4:3; Unity wants vertical.
-            float halfH = fov * 0.5f * Mathf.Deg2Rad;
+            float halfH = Mathf.Min(wideFov, 170f) * 0.5f * Mathf.Deg2Rad;
             cam.fieldOfView = 2f * Mathf.Atan(Mathf.Tan(halfH) * 0.75f) * Mathf.Rad2Deg;
         }
     }

@@ -90,6 +90,11 @@ Runtime/      Unity glue for a local player
   one from elsewhere sticks (`stickyLandings`). Jolts above `platformJolt` (2 g) aren't passed on,
   so a crash throws you off (with a small lift: ET's ground friction would stop the slide dead).
   ET only had brush movers pushing you; this is outside the deterministic step.
+- Speed feel (`PlayerView.speedFeel`, not in ET): above 12 m/s over the ground the field of view
+  widens, up to +10° at 45 m/s (smoothed), and a platform's hard jolts (over 25 m/s², measured
+  per physics step) shake the eye a little, like the driving camera. So riding the back of a
+  vehicle at speed feels fast; on foot (running, strafe jumping) nothing changes. No camera tilt:
+  rolling the horizon in first person is disorienting, and leaning already uses it.
 - Landing clips your velocity against the ground even when the move didn't touch it (it ended
   within the ground check's reach). ET didn't, and its walk code then turned the fall speed into a
   run along any slightly tilted floor, flinging you sideways off a moving truck's deck.

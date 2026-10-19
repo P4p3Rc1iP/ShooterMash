@@ -54,6 +54,11 @@ namespace ShooterMashup.Vehicles
         public bool stuntUprightAssists = true;
         [Tooltip("With a stunt: spring sag at rest as a fraction of travel (0: normal). Lower is stiffer.")]
         public float stuntRideHeight;
+        [Tooltip("Instead of a stunt or the autopilot: take part in this car chase (it runs while a player rides or drives one of them).")]
+        public ChaseGroup chase;
+        [Tooltip("With a chase: the one being chased (else a pursuer), and a pursuer's place beside it (m, + right).")]
+        public bool chaseQuarry;
+        public float chaseSlot;
 
         public struct Placement
         {
@@ -86,7 +91,14 @@ namespace ShooterMashup.Vehicles
                     trailer.CoupleTo(v);
                 }
             }
-            if (stuntSpeed > 0f)
+            if (chase != null)
+            {
+                var driver = v.gameObject.AddComponent<ChaseDriver>();
+                driver.group = chase;
+                driver.quarry = chaseQuarry;
+                driver.slot = chaseSlot;
+            }
+            else if (stuntSpeed > 0f)
             {
                 var stunt = v.gameObject.AddComponent<StuntDriver>();
                 stunt.speed = stuntSpeed;

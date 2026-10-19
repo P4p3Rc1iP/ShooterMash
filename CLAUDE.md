@@ -213,6 +213,15 @@ Agreed with the owner:
   build (stripped: nothing referenced it), so `VehicleEffects` threw on start and builds had no
   smoke. Runtime materials now copy `Assets/Resources/VehicleEffects/Particles.mat`. Rule: any
   runtime `Shader.Find` needs an asset (in a scene or Resources) using that shader and keywords.
+- **Round 3 (2026-10-19, owner back from holidays):** the heavy truck and the van sat on their bump
+  stops (8° of lean) in any full-lock turn, even at 30 km/h: the soft roll springs used the whole
+  travel. Roll stiffness is now progressive (`rollProgression` 1, plus the square of the lean
+  across the axle): 4-6° and travel to spare. Every design is in the driving range's lineup. A car
+  chase on the range (`ChaseGroup`/`ChaseDriver`): a rally truck chased by four, running while a
+  player rides or drives any of them. Riding at speed in first person: the owner asked whether
+  the driving camera's effects make sense on foot; built as `PlayerView.speedFeel` (FOV widens
+  above 12 m/s over the ground, shake on platform jolts; no tilt, which disorients in first person
+  and fights leaning).
 
 ## To-do / open questions
 
@@ -315,4 +324,5 @@ Agreed with the owner:
   posts every 100 m along z = -1000, a lineup of seven cars at the arrival (x 407). Scripted test
   drives on the flat floor east of the hub (x 130..350) must start north of z -40 (the loop
   test's run-up crosses there); on the range, spawn at `DrivingTerrain.Height` (it isn't 0 away
-  from the apron) and keep off the post line.
+  from the apron) and keep off the post line. A car chase waits on the plains south of the arrival (x ~860..920,
+  z -320).
